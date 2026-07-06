@@ -13,9 +13,11 @@ squelette. À toi d'ajouter la logique dans les sections marquées TODO.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # 1) On crée l'application. Le "title" apparaît dans la doc auto-générée
@@ -61,3 +63,9 @@ async def example_endpoint(request: ExampleRequest) -> dict:
 #    écrite en dur dans le code :
 #
 #    api_key = os.environ.get("MA_CLE_SECRETE")
+
+
+# 7) Serve le frontend en production (fichiers statiques du build React)
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
