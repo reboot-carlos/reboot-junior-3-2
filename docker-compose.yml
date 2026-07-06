@@ -1,0 +1,29 @@
+# Ce fichier permet de lancer TOUT ton projet (backend + frontend) en une
+# seule commande, sur ton ordinateur, exactement comme il tournera sur
+# Railway. C'est pratique pour tester avant de déployer.
+#
+# Commande : docker compose up --build
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - PORT=80
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped

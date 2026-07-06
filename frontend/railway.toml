@@ -1,0 +1,8 @@
+# Configuration Railway pour le service "frontend".
+# Dans Railway, ce service doit être créé avec :
+#   Root Directory = frontend
+#   Variable        = BACKEND_URL (URL publique ou interne de ton service backend)
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"

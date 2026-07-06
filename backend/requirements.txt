@@ -1,0 +1,7 @@
+# Les librairies Python dont le backend a besoin pour démarrer.
+# TODO: ajoute ici les librairies que ton projet utilise
+# (par exemple : anthropic, httpx, sqlalchemy...)
+
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-dotenv==1.0.1

@@ -1,0 +1,11 @@
+# Configuration Railway pour le service "backend".
+# Dans Railway, ce service doit être créé avec :
+#   Root Directory = backend
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 30
