@@ -12,6 +12,7 @@ import requests
 from anthropic import Anthropic
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 app = FastAPI(title="Chatbot Personnel")
@@ -657,3 +658,8 @@ def delete_history_entry(conversation_id: str = None, timestamp: str = None):
         json.dump(updated_history, f, indent=2, ensure_ascii=False)
 
     return {"status": "ok", "message": "Entrée supprimée"}
+
+# Servir les fichiers statiques du frontend (en production via Dockerfile)
+static_dir = Path("static")
+if static_dir.exists():
+    app.mount("/", StaticFiles(directory="static", html=True), name="static")
