@@ -657,10 +657,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Charger les conversations et historique si connecté
+    // Charger les conversations, historique et paramètres si connecté
     if (currentUser) {
       loadConversations();
       loadHistory();
+      loadSettings();
     }
   }, [currentUser]);
 
@@ -670,6 +671,17 @@ export default function App() {
       const res = await fetch(`/api/history?user_id=${currentUser.id}`);
       const data = await res.json();
       setHistory(data.history || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const loadSettings = async () => {
+    try {
+      const res = await fetch("/api/settings");
+      const data = await res.json();
+      if (data.language) setLanguage(data.language);
+      if (data.critical_level) setCriticalLevel(data.critical_level);
     } catch (err) {
       console.error(err);
     }
@@ -869,7 +881,10 @@ export default function App() {
       await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ critical_level: criticalLevel }),
+        body: JSON.stringify({
+          critical_level: criticalLevel,
+          language: language
+        }),
       });
     } catch (err) {
       console.error(err);
