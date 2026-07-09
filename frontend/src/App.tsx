@@ -635,7 +635,7 @@ function LoginScreen({
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wide">{t(language, "pinLabel")}</label>
               <input
-                type="number"
+                type="password"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && onSubmit()}
@@ -736,7 +736,7 @@ export default function App() {
     try {
       const res = await fetch("/api/settings");
       const data = await res.json();
-      if (data.language) setLanguage(data.language);
+      // Ne pas surcharger la langue : elle est définie par la landing page et sauvegardée dans localStorage
       if (data.critical_level) setCriticalLevel(data.critical_level);
     } catch (err) {
       console.error(err);
@@ -1401,7 +1401,7 @@ placeholder={t(language, "placeholder")}
             <h2 className="text-xl font-bold mb-6">{t(language, "settingsTitle")}</h2>
             <div className="max-w-md space-y-4">
               <div className="bg-slate-800 p-4 rounded-lg">
-                <label className="block text-sm font-semibold mb-2">Thème</label>
+                <label className="block text-sm font-semibold mb-2">{t(language, "theme")}</label>
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
@@ -1425,7 +1425,7 @@ placeholder={t(language, "placeholder")}
               </div>
 
               <div className="bg-slate-800 p-4 rounded-lg">
-                <label className="block text-sm font-semibold mb-2">Langue</label>
+                <label className="block text-sm font-semibold mb-2">{t(language, "language")}</label>
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
@@ -1458,7 +1458,7 @@ placeholder={t(language, "placeholder")}
               </div>
 
               <div className="bg-slate-800 p-4 rounded-lg">
-                <label className="block text-sm font-semibold mb-2">Niveau critique: {criticalLevel}</label>
+                <label className="block text-sm font-semibold mb-2">{t(language, "criticalLevel")}: {criticalLevel}</label>
                 <input
                   type="range"
                   min="0"
@@ -1470,7 +1470,7 @@ placeholder={t(language, "placeholder")}
                   }}
                   className="w-full"
                 />
-                <p className="text-xs mt-2 opacity-60">0 = Bienveillant | 50 = Neutre | 100 = Critique</p>
+                <p className="text-xs mt-2 opacity-60">{t(language, "critical")}</p>
               </div>
 
               <div className="bg-slate-800 p-4 rounded-lg">
@@ -1483,19 +1483,19 @@ placeholder={t(language, "placeholder")}
                       updateSettings();
                     }}
                   />
-                  <span className="text-sm font-semibold">Gestion de la mémoire</span>
+                  <span className="text-sm font-semibold">{t(language, "memory")}</span>
                 </label>
-                <p className="text-xs mt-2 opacity-60">L'IA retiendra les infos importantes</p>
+                <p className="text-xs mt-2 opacity-60">{t(language, "memoryDesc")}</p>
               </div>
 
               <div className="bg-slate-800 p-4 rounded-lg border border-red-900/30">
-                <label className="block text-sm font-semibold text-red-400 mb-3">🗑️ Suppression des données</label>
-                <p className="text-xs opacity-60 mb-3">Attention : ces actions sont irréversibles</p>
+                <label className="block text-sm font-semibold text-red-400 mb-3">{t(language, "deleteData")}</label>
+                <p className="text-xs opacity-60 mb-3">{t(language, "deleteWarning")}</p>
                 <button
                   onClick={clearAllHistory}
                   className="w-full bg-red-600/20 hover:bg-red-600/40 text-red-300 px-3 py-2 rounded text-sm font-semibold"
                 >
-                  Supprimer tout l'historique
+                  {t(language, "deleteHistory")}
                 </button>
               </div>
             </div>
@@ -1504,7 +1504,7 @@ placeholder={t(language, "placeholder")}
 
         {tab === "history" && (
           <div className="flex-1 overflow-y-auto p-6">
-            <h2 className="text-xl font-bold mb-6">📊 Historique de {currentUser?.pseudo}</h2>
+            <h2 className="text-xl font-bold mb-6">{t(language, "historyTitle")} {currentUser?.pseudo}</h2>
             {history && history.length > 0 ? (
               <div className="max-w-4xl space-y-4">
                 {history.map((entry, idx) => (
