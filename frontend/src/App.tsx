@@ -22,13 +22,24 @@ interface Conversation {
   updated_at: string;
   tags: string[];
   user_id?: string;
-  folder?: string;
+  folder: string | null;
 }
 
 interface Folder {
   id: string;
   name: string;
+  parent_id: string | null;
   user_id?: string;
+  created_at: string;
+}
+
+type DragItem = { type: "conversation"; id: string } | { type: "folder"; id: string };
+
+interface FolderNode {
+  folder: Folder;
+  children: FolderNode[];
+  conversations: Conversation[];
+  depth: number;
 }
 
 interface User {
@@ -671,11 +682,29 @@ function LoginScreen({
   );
 }
 
+function buildFolderTree(
+  folders: Folder[],
+  conversations: Conversation[],
+  parentId: string | null = null,
+  depth = 0
+): FolderNode[] {
+  return folders
+    .filter((f) => f.parent_id === parentId)
+    .map((folder) => ({
+      folder,
+      depth,
+      children: buildFolderTree(folders, conversations, folder.id, depth + 1),
+      conversations: conversations.filter((c) => c.folder === folder.id),
+    }));
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [activeDragItem, setActiveDragItem] = useState<DragItem | null>(null);
   const [currentConvId, setCurrentConvId] = useState<string>("");
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -713,11 +742,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Charger les conversations, historique et paramètres si connecté
+    // Charger les conversations, historique, paramètres et dossiers si connecté
     if (currentUser) {
       loadConversations();
       loadHistory();
       loadSettings();
+      loadFolders();
     }
   }, [currentUser]);
 
@@ -738,6 +768,17 @@ export default function App() {
       const data = await res.json();
       // Ne pas surcharger la langue : elle est définie par la landing page et sauvegardée dans localStorage
       if (data.critical_level) setCriticalLevel(data.critical_level);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const loadFolders = async () => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch(`/api/folders?user_id=${currentUser.id}`);
+      const data = await res.json();
+      setFolders(data.folders);
     } catch (err) {
       console.error(err);
     }
@@ -796,6 +837,7 @@ export default function App() {
     sessionStorage.removeItem("currentUser");
     setMessages([]);
     setConversations([]);
+    setFolders([]);
     setCurrentConvId("");
     setShowLanding(true);
   };
@@ -973,29 +1015,75 @@ export default function App() {
     }
   };
 
-  const createFolder = async () => {
-    if (!currentUser || !newFolderName.trim()) return;
-    const folderId = `folder-${Date.now()}`;
-    const newFolder: Folder = { id: folderId, name: newFolderName, user_id: currentUser.id };
-    setFolders([...folders, newFolder]);
-    setNewFolderName("");
-    setShowNewFolderInput(false);
+  const createFolder = async (name: string, parentId: string | null = null) => {
+    if (!currentUser || !name.trim()) return;
+    try {
+      await fetch("/api/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, parent_id: parentId, user_id: currentUser.id }),
+      });
+      await loadFolders();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const deleteFolder = async (folderId: string) => {
     const folderName = folders.find((f) => f.id === folderId)?.name || (language === "fr" ? "ce dossier" : language === "es" ? "esta carpeta" : "this folder");
-    const warningPrefix = language === "fr" ? `⚠️ Supprimer le dossier "${folderName}"?` : language === "es" ? `⚠️ ¿Eliminar la carpeta "${folderName}"?` : `⚠️ Delete folder "${folderName}"?`;
-    const warningSuffix = t(language, "deleteFolderWarning").split("?")[1];
-    if (!window.confirm(warningPrefix + "?" + warningSuffix)) {
+    if (!window.confirm(`⚠️ ${language === "fr" ? `Supprimer "${folderName}"?` : language === "es" ? `¿Eliminar "${folderName}"?` : `Delete "${folderName}"?`}`)) {
       return;
     }
-    setFolders(folders.filter((f) => f.id !== folderId));
-    // Enlever le dossier des conversations dans ce dossier
-    setConversations(conversations.map((c) => c.folder === folderId ? { ...c, folder: undefined } : c));
+    try {
+      await fetch(`/api/folders/${folderId}`, { method: "DELETE" });
+      await loadFolders();
+      await loadConversations();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const moveConversationToFolder = (convId: string, folderId: string | null) => {
-    setConversations(conversations.map((c) => c.id === convId ? { ...c, folder: folderId || undefined } : c));
+  const renameFolder = async (folderId: string, newName: string) => {
+    try {
+      await fetch(`/api/folders/${folderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName }),
+      });
+      await loadFolders();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const moveConversationToFolder = async (convId: string, folderId: string | null) => {
+    setConversations((prev) =>
+      prev.map((c) => c.id === convId ? { ...c, folder: folderId } : c)
+    );
+    try {
+      await fetch(`/api/conversations/${convId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder: folderId }),
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const moveFolderToParent = async (folderId: string, newParentId: string | null) => {
+    setFolders((prev) =>
+      prev.map((f) => f.id === folderId ? { ...f, parent_id: newParentId } : f)
+    );
+    try {
+      await fetch(`/api/folders/${folderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parent_id: newParentId }),
+      });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   if (showLanding && !currentUser) {
@@ -1052,11 +1140,15 @@ export default function App() {
                 type="text"
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
-  placeholder={t(language, "folderName")}
+                placeholder={t(language, "folderName")}
                 className="flex-1 px-2 py-1 rounded text-xs bg-slate-700 text-white"
               />
               <button
-                onClick={createFolder}
+                onClick={async () => {
+                  await createFolder(newFolderName);
+                  setNewFolderName("");
+                  setShowNewFolderInput(false);
+                }}
                 className="px-2 py-1 rounded text-xs bg-green-600 hover:bg-green-700 text-white"
               >
                 ✓
