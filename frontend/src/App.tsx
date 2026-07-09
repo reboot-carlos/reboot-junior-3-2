@@ -4,7 +4,26 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp?: string;
+  language?: string;
 }
+
+function detectLanguage(text: string): "fr" | "en" {
+  // Caractères accentués français courants
+  const frenchChars = /[éèêêàâäùûüôöçœæ]/i;
+  // Mots français courants
+  const frenchWords = /\b(le|la|les|de|du|des|un|une|et|ou|mais|pour|avec|sans|dans|sur|par|qui|que|ce|cette|celui|ceux|moi|toi|nous|vous|ils|elles|je|tu|il|elle|on|est|être|avoir|faire|aller|venir|pouvoir|devoir|vouloir|savoir|dire|donner|trouver|montrer|porter|parler|chercher|regarder|écouter|demander|répondre|raison|chose|question|problème|situation|solution|information|explication|exemple)\b/i;
+
+  const hasAccents = frenchChars.test(text);
+  const hasFrenchWords = frenchWords.test(text);
+
+  // Si plus de 30% du texte sont des caractères accentués ou mots français
+  if (hasAccents || hasFrenchWords) {
+    return "fr";
+  }
+
+  return "en";
+}
+
 
 interface ChatResponse {
   response: string;
@@ -796,8 +815,9 @@ export default function App() {
 
     const userMessage = input;
     const convIdAtSend = currentConvId;
+    const messageLanguage = detectLanguage(userMessage);
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    setMessages((prev) => [...prev, { role: "user", content: userMessage, language: messageLanguage }]);
     setLoading(true);
 
     abortControllerRef.current = new AbortController();
@@ -806,13 +826,18 @@ export default function App() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage, conversation_id: convIdAtSend, user_id: currentUser?.id }),
+        body: JSON.stringify({
+          message: userMessage,
+          conversation_id: convIdAtSend,
+          user_id: currentUser?.id,
+          language: messageLanguage
+        }),
         signal: abortControllerRef.current.signal,
       });
       const data: ChatResponse = await res.json();
       // Vérifier que l'utilisateur n'a pas changé de conversation
       if (currentConvId === convIdAtSend) {
-        setMessages((prev) => [...prev, { role: "assistant", content: data.response }]);
+        setMessages((prev) => [...prev, { role: "assistant", content: data.response, language: messageLanguage }]);
       }
       if (data.conversation_id) {
         setCurrentConvId(data.conversation_id);
@@ -899,6 +924,10 @@ export default function App() {
   };
 
   const deleteFolder = async (folderId: string) => {
+    const folderName = folders.find((f) => f.id === folderId)?.name || "ce dossier";
+    if (!window.confirm(`⚠️ Supprimer le dossier "${folderName}"? Les conversations dedans resteront, mais ne seront plus rangées.`)) {
+      return;
+    }
     setFolders(folders.filter((f) => f.id !== folderId));
     // Enlever le dossier des conversations dans ce dossier
     setConversations(conversations.map((c) => c.folder === folderId ? { ...c, folder: undefined } : c));
