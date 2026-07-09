@@ -81,6 +81,9 @@ export const translations = {
     deleteAllWarning: "⚠️ Supprimer TOUT l'historique? Cette action est irréversible.",
     deleteFolderWarning: "⚠️ Supprimer ce dossier? Les conversations dedans resteront, mais ne seront plus rangées.",
     deleteEntry: "Supprimer cette entrée",
+    emptyFolder: "Vide",
+    subfolderBtn: "Sous-dossier",
+    maxDepth: "Profondeur maximale atteinte",
   },
   en: {
     newConv: "+ New",
@@ -164,6 +167,9 @@ export const translations = {
     deleteAllWarning: "⚠️ Delete ALL history? This action is irreversible.",
     deleteFolderWarning: "⚠️ Delete this folder? Conversations inside will remain, but won't be organized.",
     deleteEntry: "Delete this entry",
+    emptyFolder: "Empty",
+    subfolderBtn: "Subfolder",
+    maxDepth: "Max depth reached",
   },
   es: {
     newConv: "+ Nuevo",
@@ -247,6 +253,9 @@ export const translations = {
     deleteAllWarning: "⚠️ ¿Eliminar TODO el historial? Esta acción es irreversible.",
     deleteFolderWarning: "⚠️ ¿Eliminar esta carpeta? Las conversaciones seguirán existiendo, pero no estarán organizadas.",
     deleteEntry: "Eliminar esta entrada",
+    emptyFolder: "Vacío",
+    subfolderBtn: "Subcarpeta",
+    maxDepth: "Profundidad máxima",
   }
 };
 
