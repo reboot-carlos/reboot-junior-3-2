@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { t } from "./translations";
 
 interface Message {
@@ -698,6 +700,12 @@ function buildFolderTree(
     }));
 }
 
+function parseDragId(id: string): DragItem | null {
+  if (id.startsWith("conv:")) return { type: "conversation", id: id.slice(5) };
+  if (id.startsWith("folder:")) return { type: "folder", id: id.slice(7) };
+  return null;
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1083,6 +1091,38 @@ export default function App() {
       });
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // DnD handlers
+  const sensors = useSensors(useSensor(PointerSensor), useSensor(TouchSensor));
+
+  const handleDragStart = ({ active }: DragStartEvent) => {
+    const item = parseDragId(String(active.id));
+    setActiveDragItem(item);
+  };
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    setActiveDragItem(null);
+    if (!over) return;
+
+    const dragged = parseDragId(String(active.id));
+    const target = parseDragId(String(over.id));
+
+    if (!dragged) return;
+
+    // Dropping onto root drop zone
+    if (over.id === "root-drop") {
+      if (dragged.type === "conversation") moveConversationToFolder(dragged.id, null);
+      if (dragged.type === "folder") moveFolderToParent(dragged.id, null);
+      return;
+    }
+
+    if (target?.type === "folder") {
+      if (dragged.type === "conversation") moveConversationToFolder(dragged.id, target.id);
+      if (dragged.type === "folder" && dragged.id !== target.id) {
+        moveFolderToParent(dragged.id, target.id);
+      }
     }
   };
 
