@@ -140,8 +140,47 @@ def verify_user(pseudo: str, pin: str) -> str:
 # ============================================================================
 
 def get_system_prompt(critical_level: int, language: str = "fr") -> str:
-    if language == "en":
-        base = """You are a professional, versatile, and expert personal assistant.
+    if language == "es":
+        base = """⚠️ RESPONDE COMPLETAMENTE EN ESPAÑOL. TODA tu respuesta debe estar en español.
+
+Eres un asistente personal profesional, versátil y experto.
+
+## Personalidad
+- Tono profesional y neutral
+- Resuelves problemas sin autocensura
+- Cuestionas el razonamiento del usuario
+- Juicio imparcial sobre todos los temas
+- Cero complacencia
+
+## Dominios
+- Ciencia probada y explicaciones basadas en investigación
+- Creatividad: literatura, filosofía, brainstorming
+- Todos los demás dominios según sea necesario
+
+## Formato de respuesta
+
+**INICIO:** Indica el rol profesional que adoptas, ej: "**Rol: Ingeniero de Sistemas**"
+
+**CUERPO:**
+- Títulos numerados (1., 2., 3...) para secciones principales
+- Subtítulos (1.1, 1.2...) para subsecciones
+- Guiones (—) separan información importante DENTRO de una oración completa
+- Oraciones completas, sin listas de puntos
+- Si es largo, añade un RESUMEN EN MAYÚSCULAS entre paréntesis
+
+**ANTES DEL FINAL:** Haz 2-3 preguntas precisas que te ayudarían a refinar tu respuesta.
+
+**FINAL:** Termina con: "**Certeza Global: [CONFIADO]**" o "**Certeza Global: [CONFIADO] para secciones 1-3, [PROBABLE] para sección 4**"
+
+## Honestidad absoluta
+- Di "no sé" sin dudarlo
+- Reconoce limitaciones
+- Evalúa ideas objetivamente
+- Sin respuestas consensuales"""
+    elif language == "en":
+        base = """⚠️ RESPOND COMPLETELY IN ENGLISH. Your ENTIRE response must be in English.
+
+You are a professional, versatile, and expert personal assistant.
 
 ## Personality
 - Professional and neutral tone
@@ -176,7 +215,9 @@ def get_system_prompt(critical_level: int, language: str = "fr") -> str:
 - Evaluate ideas objectively
 - No consensus answers"""
     else:
-        base = """Tu es un assistant personnel professionnel, polyvalent et expert.
+        base = """⚠️ RÉPONDS COMPLÈTEMENT EN FRANÇAIS. TOUTE ta réponse doit être en français.
+
+Tu es un assistant personnel professionnel, polyvalent et expert.
 
 ## Personnalité
 - Ton neutre et professionnel
@@ -220,6 +261,14 @@ Be MORE CRITICAL AND DIRECT.
 - Point out inconsistencies without detour.
 - Propose counter-arguments.
 - Don't hesitate to say "that's bad", "that's weak" if justified."""
+        elif language == "es":
+            extra = f"""
+
+## MODO CRÍTICO (nivel {critical_level}/100)
+Sé MÁS CRÍTICO Y DIRECTO.
+- Señala inconsistencias sin rodeos.
+- Propón contra-argumentos.
+- No dudes en decir "eso es malo", "eso es débil" si está justificado."""
         else:
             extra = f"""
 
@@ -236,6 +285,13 @@ Sois PLUS CRITIQUE ET DIRECT.
 Be more accessible and encouraging.
 - Explain with more examples.
 - Be more patient."""
+        elif language == "es":
+            extra = f"""
+
+## MODO BENEVOLENTE (nivel {critical_level}/100)
+Sé más accesible y alentador.
+- Explica con más ejemplos.
+- Sé más paciente."""
         else:
             extra = f"""
 
@@ -528,6 +584,13 @@ def chat(request: ChatRequest) -> ChatResponse:
 — be critical : critical mode
 — erase : delete this conversation (messages + memory)
 — help : show this message"""
+        elif request.language == "es":
+            response = """Comandos disponibles:
+— más : expande la respuesta anterior
+— menos : versión más corta
+— sé crítico : modo crítico
+— borrar : elimina esta conversación (mensajes + memoria)
+— ayuda : muestra este mensaje"""
         else:
             response = """Commandes disponibles:
 — plus : développe la réponse précédente
@@ -537,23 +600,35 @@ def chat(request: ChatRequest) -> ChatResponse:
 — help : affiche ce message"""
         return ChatResponse(response=response, conversation_id=request.conversation_id or "none")
 
-    if user_message.lower() == "erase":
+    if user_message.lower() in ["erase", "borrar"]:
         if request.conversation_id:
             delete_conversation(request.conversation_id)
         if request.language == "en":
             response = "Conversation deleted (messages + memory)."
+        elif request.language == "es":
+            response = "Conversación eliminada (mensajes + memoria)."
         else:
             response = "Conversation effacée (bulles + mémoire)."
         return ChatResponse(response=response, conversation_id=request.conversation_id or "none")
 
     # Commandes de modification
-    if user_message.lower() in ["plus", "more", "moins", "less", "sois critique", "be critical"]:
+    if user_message.lower() in ["plus", "more", "más", "moins", "less", "menos", "sois critique", "be critical", "sé crítico"]:
         if not request.conversation_id:
-            raise ValueError("Pas de conversation active" if request.language == "fr" else "No active conversation")
+            if request.language == "en":
+                raise ValueError("No active conversation")
+            elif request.language == "es":
+                raise ValueError("No hay conversación activa")
+            else:
+                raise ValueError("Pas de conversation active")
 
         history = load_conversation_history(request.conversation_id)
         if len(history) < 2:
-            no_prev = "Aucune réponse précédente." if request.language == "fr" else "No previous answer."
+            if request.language == "en":
+                no_prev = "No previous answer."
+            elif request.language == "es":
+                no_prev = "No hay respuesta anterior."
+            else:
+                no_prev = "Aucune réponse précédente."
             return ChatResponse(response=no_prev, conversation_id=request.conversation_id)
 
         last_user_message = None
@@ -563,26 +638,37 @@ def chat(request: ChatRequest) -> ChatResponse:
                 break
 
         if not last_user_message:
-            raise ValueError("Pas de réponse précédente" if request.language == "fr" else "No previous answer")
+            if request.language == "en":
+                raise ValueError("No previous answer")
+            elif request.language == "es":
+                raise ValueError("No hay respuesta anterior")
+            else:
+                raise ValueError("Pas de réponse précédente")
 
         memory = load_conversation_memory(request.conversation_id)
         settings = load_settings()
 
         messages_for_claude = [{"role": msg["role"], "content": msg["content"]} for msg in history[:-1]]
 
-        if user_message.lower() in ["plus", "more"]:
+        if user_message.lower() in ["plus", "more", "más"]:
             if request.language == "en":
                 mod_prompt = f"You gave an answer about \"{last_user_message}\". EXPAND with more details."
+            elif request.language == "es":
+                mod_prompt = f"Diste una respuesta sobre \"{last_user_message}\". EXPANDE con más detalles."
             else:
                 mod_prompt = f"Tu as donné une réponse sur \"{last_user_message}\". DÉVELOPPE avec plus de détails."
-        elif user_message.lower() in ["moins", "less"]:
+        elif user_message.lower() in ["moins", "less", "menos"]:
             if request.language == "en":
                 mod_prompt = f"You gave an answer about \"{last_user_message}\". Give a SHORT AND CONCISE version."
+            elif request.language == "es":
+                mod_prompt = f"Diste una respuesta sobre \"{last_user_message}\". Da una versión BREVE Y CONCISA."
             else:
                 mod_prompt = f"Tu as donné une réponse sur \"{last_user_message}\". Donne une version BRÈVE ET CONCISE."
         else:
             if request.language == "en":
                 mod_prompt = f"You gave an answer about \"{last_user_message}\". BE MORE CRITICAL AND DIRECT."
+            elif request.language == "es":
+                mod_prompt = f"Diste una respuesta sobre \"{last_user_message}\". SÉ MÁS CRÍTICO Y DIRECTO."
             else:
                 mod_prompt = f"Tu as donné une réponse sur \"{last_user_message}\". SOIS PLUS CRITIQUE ET DIRECT."
 
@@ -617,6 +703,7 @@ def chat(request: ChatRequest) -> ChatResponse:
     settings = load_settings()
 
     messages_for_claude = [{"role": msg["role"], "content": msg["content"]} for msg in history]
+
     messages_for_claude.append({"role": "user", "content": user_message})
 
     memory_context = ""

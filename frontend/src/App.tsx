@@ -7,22 +7,6 @@ interface Message {
   language?: string;
 }
 
-function detectLanguage(text: string): "fr" | "en" {
-  // Caractères accentués français courants
-  const frenchChars = /[éèêêàâäùûüôöçœæ]/i;
-  // Mots français courants
-  const frenchWords = /\b(le|la|les|de|du|des|un|une|et|ou|mais|pour|avec|sans|dans|sur|par|qui|que|ce|cette|celui|ceux|moi|toi|nous|vous|ils|elles|je|tu|il|elle|on|est|être|avoir|faire|aller|venir|pouvoir|devoir|vouloir|savoir|dire|donner|trouver|montrer|porter|parler|chercher|regarder|écouter|demander|répondre|raison|chose|question|problème|situation|solution|information|explication|exemple)\b/i;
-
-  const hasAccents = frenchChars.test(text);
-  const hasFrenchWords = frenchWords.test(text);
-
-  // Si plus de 30% du texte sont des caractères accentués ou mots français
-  if (hasAccents || hasFrenchWords) {
-    return "fr";
-  }
-
-  return "en";
-}
 
 
 interface ChatResponse {
@@ -652,6 +636,7 @@ export default function App() {
   const [editingConvId, setEditingConvId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [language, setLanguage] = useState<"fr" | "en" | "es">("fr");
   const [criticalLevel, setCriticalLevel] = useState(50);
   const [memoryEnabled, setMemoryEnabled] = useState(true);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -815,9 +800,8 @@ export default function App() {
 
     const userMessage = input;
     const convIdAtSend = currentConvId;
-    const messageLanguage = detectLanguage(userMessage);
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMessage, language: messageLanguage }]);
+    setMessages((prev) => [...prev, { role: "user", content: userMessage, language }]);
     setLoading(true);
 
     abortControllerRef.current = new AbortController();
@@ -830,14 +814,14 @@ export default function App() {
           message: userMessage,
           conversation_id: convIdAtSend,
           user_id: currentUser?.id,
-          language: messageLanguage
+          language: language
         }),
         signal: abortControllerRef.current.signal,
       });
       const data: ChatResponse = await res.json();
       // Vérifier que l'utilisateur n'a pas changé de conversation
       if (currentConvId === convIdAtSend) {
-        setMessages((prev) => [...prev, { role: "assistant", content: data.response, language: messageLanguage }]);
+        setMessages((prev) => [...prev, { role: "assistant", content: data.response, language }]);
       }
       if (data.conversation_id) {
         setCurrentConvId(data.conversation_id);
@@ -1353,6 +1337,39 @@ export default function App() {
                     className={`flex-1 py-2 rounded ${theme === "light" ? "bg-blue-600" : "bg-slate-700"}`}
                   >
                     ☀️ Light
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-slate-800 p-4 rounded-lg">
+                <label className="block text-sm font-semibold mb-2">Langue</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setLanguage("fr");
+                      updateSettings();
+                    }}
+                    className={`flex-1 py-2 rounded ${language === "fr" ? "bg-blue-600" : "bg-slate-700"}`}
+                  >
+                    🇫🇷 Français
+                  </button>
+                  <button
+                    onClick={() => {
+                      setLanguage("en");
+                      updateSettings();
+                    }}
+                    className={`flex-1 py-2 rounded ${language === "en" ? "bg-blue-600" : "bg-slate-700"}`}
+                  >
+                    🇬🇧 English
+                  </button>
+                  <button
+                    onClick={() => {
+                      setLanguage("es");
+                      updateSettings();
+                    }}
+                    className={`flex-1 py-2 rounded ${language === "es" ? "bg-blue-600" : "bg-slate-700"}`}
+                  >
+                    🇪🇸 Español
                   </button>
                 </div>
               </div>
