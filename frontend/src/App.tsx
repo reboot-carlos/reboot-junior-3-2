@@ -663,7 +663,7 @@ function LoginScreen({
             onClick={onBackToLanding}
             className="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white font-semibold py-3 rounded-lg transition-all duration-300"
           >
-            ← {language === "fr" ? "Retour" : language === "es" ? "Volver" : "Back"}
+            {t(language, "backButton")}
           </button>
         </div>
       </div>
@@ -820,7 +820,7 @@ export default function App() {
       const data = await res.json();
       setConversations(data.conversations);
       if (data.conversations.length === 0) {
-        const newId = await createNewConversation("Nouvelle conversation");
+        const newId = await createNewConversation(t(language, "newConversation"));
         setCurrentConvId(newId);
       } else {
         setCurrentConvId(data.conversations[0].id);
@@ -953,7 +953,7 @@ export default function App() {
 
   const clearAllHistory = async () => {
     if (!currentUser) return;
-    if (!window.confirm("⚠️ Supprimer TOUT l'historique? Cette action est irréversible.")) return;
+    if (!window.confirm(t(language, "deleteAllWarning"))) return;
 
     try {
       await fetch(`/api/history/clear-all?user_id=${currentUser.id}`, { method: "DELETE" });
@@ -983,8 +983,10 @@ export default function App() {
   };
 
   const deleteFolder = async (folderId: string) => {
-    const folderName = folders.find((f) => f.id === folderId)?.name || "ce dossier";
-    if (!window.confirm(`⚠️ Supprimer le dossier "${folderName}"? Les conversations dedans resteront, mais ne seront plus rangées.`)) {
+    const folderName = folders.find((f) => f.id === folderId)?.name || (language === "fr" ? "ce dossier" : language === "es" ? "esta carpeta" : "this folder");
+    const warningPrefix = language === "fr" ? `⚠️ Supprimer le dossier "${folderName}"?` : language === "es" ? `⚠️ ¿Eliminar la carpeta "${folderName}"?` : `⚠️ Delete folder "${folderName}"?`;
+    const warningSuffix = t(language, "deleteFolderWarning").split("?")[1];
+    if (!window.confirm(warningPrefix + "?" + warningSuffix)) {
       return;
     }
     setFolders(folders.filter((f) => f.id !== folderId));
@@ -1033,7 +1035,7 @@ export default function App() {
       >
         <div className="p-4 border-b border-slate-700 space-y-2">
           <button
-            onClick={() => createNewConversation("Nouvelle conversation")}
+            onClick={() => createNewConversation(t(language, "newConversation"))}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-semibold"
           >
             {t(language, "newConv")}
@@ -1280,7 +1282,7 @@ export default function App() {
                 <div className="h-full flex items-center justify-center">
                   <div className="text-center space-y-4">
                     <div className="text-6xl">💬</div>
-                    <p className="text-lg font-medium">Commencez une conversation</p>
+                    <p className="text-lg font-medium">{t(language, "startConv")}</p>
                   </div>
                 </div>
               ) : (
@@ -1526,7 +1528,7 @@ placeholder={t(language, "placeholder")}
                           <button
                             onClick={() => deleteHistoryEntry(entry.conversation_id, entry.timestamp)}
                             className="opacity-0 group-hover:opacity-100 text-xs text-red-400 hover:text-red-300 transition-opacity"
-                            title="Supprimer cette entrée"
+                            title={t(language, "deleteEntry")}
                           >
                             ✕
                           </button>
@@ -1541,7 +1543,7 @@ placeholder={t(language, "placeholder")}
             ) : (
               <div className="text-center text-slate-400 py-12">
                 <div className="text-4xl mb-4">📭</div>
-                <p>Aucun historique pour le moment</p>
+                <p>{t(language, "noHistory")}</p>
               </div>
             )}
           </div>

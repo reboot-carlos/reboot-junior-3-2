@@ -75,6 +75,12 @@ export const translations = {
     // Messages
     noConversation: "Aucune conversation active",
     noPreviousAnswer: "Aucune réponse précédente",
+    noHistory: "Aucun historique pour le moment",
+    backButton: "← Retour",
+    newConversation: "Nouvelle conversation",
+    deleteAllWarning: "⚠️ Supprimer TOUT l'historique? Cette action est irréversible.",
+    deleteFolderWarning: "⚠️ Supprimer ce dossier? Les conversations dedans resteront, mais ne seront plus rangées.",
+    deleteEntry: "Supprimer cette entrée",
   },
   en: {
     newConv: "+ New",
@@ -152,6 +158,12 @@ export const translations = {
     // Messages
     noConversation: "No active conversation",
     noPreviousAnswer: "No previous answer",
+    noHistory: "No history yet",
+    backButton: "← Back",
+    newConversation: "New conversation",
+    deleteAllWarning: "⚠️ Delete ALL history? This action is irreversible.",
+    deleteFolderWarning: "⚠️ Delete this folder? Conversations inside will remain, but won't be organized.",
+    deleteEntry: "Delete this entry",
   },
   es: {
     newConv: "+ Nuevo",
@@ -229,6 +241,12 @@ export const translations = {
     // Messages
     noConversation: "Sin conversación activa",
     noPreviousAnswer: "Sin respuesta anterior",
+    noHistory: "Sin historial por ahora",
+    backButton: "← Volver",
+    newConversation: "Nueva conversación",
+    deleteAllWarning: "⚠️ ¿Eliminar TODO el historial? Esta acción es irreversible.",
+    deleteFolderWarning: "⚠️ ¿Eliminar esta carpeta? Las conversaciones seguirán existiendo, pero no estarán organizadas.",
+    deleteEntry: "Eliminar esta entrada",
   }
 };
 
