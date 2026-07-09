@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { t } from "./translations";
 
 interface Message {
   role: "user" | "assistant";
@@ -968,13 +969,13 @@ export default function App() {
             onClick={() => createNewConversation("Nouvelle conversation")}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-semibold"
           >
-            + Nouveau
+            {t(language, "newConv")}
           </button>
           <button
             onClick={() => setShowNewFolderInput(!showNewFolderInput)}
             className="w-full bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm font-semibold"
           >
-            📁 Dossier
+            {t(language, "folder")}
           </button>
           {showNewFolderInput && (
             <div className="flex gap-2">
@@ -982,7 +983,7 @@ export default function App() {
                 type="text"
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
-                placeholder="Nom du dossier..."
+  placeholder={t(language, "folderName")}
                 className="flex-1 px-2 py-1 rounded text-xs bg-slate-700 text-white"
               />
               <button
@@ -1062,7 +1063,7 @@ export default function App() {
           {/* Conversations sans dossier */}
           {conversations.filter((c) => !c.folder).length > 0 && (
             <div>
-              <div className="px-2 py-1 text-xs font-semibold text-slate-300">📄 Sans dossier</div>
+              <div className="px-2 py-1 text-xs font-semibold text-slate-300">{t(language, "noFolder")}</div>
               <div className="space-y-1">
                 {conversations.filter((c) => !c.folder).map((conv) => (
                   <div
@@ -1199,7 +1200,7 @@ export default function App() {
               onClick={handleLogout}
               className="px-3 py-2 rounded bg-red-600/20 hover:bg-red-600/40 text-red-300 text-sm"
             >
-              ⬡ Déconnexion
+              {t(language, "logout")}
             </button>
           </div>
         </div>
@@ -1281,7 +1282,7 @@ export default function App() {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Votre question..."
+placeholder={t(language, "placeholder")}
                   className="flex-1 px-5 py-3 rounded-xl chat-input"
                 />
                 <button
@@ -1330,7 +1331,7 @@ export default function App() {
 
         {tab === "settings" && (
           <div className="flex-1 overflow-y-auto p-6">
-            <h2 className="text-xl font-bold mb-6">⚙️ Paramètres</h2>
+            <h2 className="text-xl font-bold mb-6">{t(language, "settingsTitle")}</h2>
             <div className="max-w-md space-y-4">
               <div className="bg-slate-800 p-4 rounded-lg">
                 <label className="block text-sm font-semibold mb-2">Thème</label>
@@ -1366,7 +1367,7 @@ export default function App() {
                     }}
                     className={`flex-1 py-2 rounded ${language === "fr" ? "bg-blue-600" : "bg-slate-700"}`}
                   >
-                    🇫🇷 Français
+                    {t(language, "french")}
                   </button>
                   <button
                     onClick={() => {
@@ -1375,7 +1376,7 @@ export default function App() {
                     }}
                     className={`flex-1 py-2 rounded ${language === "en" ? "bg-blue-600" : "bg-slate-700"}`}
                   >
-                    🇬🇧 English
+                    {t(language, "english")}
                   </button>
                   <button
                     onClick={() => {
@@ -1384,7 +1385,7 @@ export default function App() {
                     }}
                     className={`flex-1 py-2 rounded ${language === "es" ? "bg-blue-600" : "bg-slate-700"}`}
                   >
-                    🇪🇸 Español
+                    {t(language, "spanish")}
                   </button>
                 </div>
               </div>
