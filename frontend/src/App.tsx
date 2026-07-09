@@ -226,9 +226,48 @@ function getCertaintyClass(label: string): string {
   return map[label] || "bg-slate-700/50 text-slate-300";
 }
 
-function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
+function LandingPage({
+  onGetStarted,
+  language,
+  setLanguage
+}: {
+  onGetStarted: () => void;
+  language: "fr" | "en" | "es";
+  setLanguage: (lang: "fr" | "en" | "es") => void;
+}) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 overflow-hidden relative">
+      {/* Language selector */}
+      <div className="fixed top-4 right-4 z-50 flex gap-2">
+        <button
+          onClick={() => {
+            setLanguage("fr");
+            localStorage.setItem("language", "fr");
+          }}
+          className={`px-3 py-1 rounded text-sm font-semibold ${language === "fr" ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}
+        >
+          🇫🇷 FR
+        </button>
+        <button
+          onClick={() => {
+            setLanguage("en");
+            localStorage.setItem("language", "en");
+          }}
+          className={`px-3 py-1 rounded text-sm font-semibold ${language === "en" ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}
+        >
+          🇬🇧 EN
+        </button>
+        <button
+          onClick={() => {
+            setLanguage("es");
+            localStorage.setItem("language", "es");
+          }}
+          className={`px-3 py-1 rounded text-sm font-semibold ${language === "es" ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}
+        >
+          🇪🇸 ES
+        </button>
+      </div>
+
       {/* Animated background with geometric lines */}
       <div className="fixed inset-0 z-0">
         {/* Base gradient */}
@@ -358,11 +397,11 @@ function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
 
           <div className="space-y-6">
             <h1 className="hero-title text-7xl font-bold">
-              <span className="block text-slate-100">Chatbot Personnel</span>
-              <span className="block bg-gradient-to-r from-blue-400 via-blue-500 to-blue-600 bg-clip-text text-transparent">Intelligent & Critique</span>
+              <span className="block text-slate-100">{t(language, "landingTitle")}</span>
+              <span className="block bg-gradient-to-r from-blue-400 via-blue-500 to-blue-600 bg-clip-text text-transparent">{t(language, "landingSubtitle")}</span>
             </h1>
             <p className="hero-subtitle text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-              Conversez avec une IA qui ne vous dit pas ce que vous voulez entendre. Gérez vos conversations en toute confidentialité.
+              {t(language, "landingDesc")}
             </p>
           </div>
 
@@ -371,7 +410,7 @@ function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
               onClick={onGetStarted}
               className="cta-button"
             >
-              Commencer →
+              {t(language, "landingCTA")}
             </button>
           </div>
         </div>
@@ -380,24 +419,24 @@ function LandingPage({ onGetStarted }: { onGetStarted: () => void }) {
       {/* Stats */}
       <div className="relative z-10 bg-slate-900/50 py-20 px-6 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">Fonctionnalités</h2>
+          <h2 className="text-3xl font-bold text-center mb-12">{t(language, "featuresTitle")}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300 transform hover:-translate-y-2">
               <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg mb-4" />
-              <h3 className="font-semibold mb-2">Multi-Conversations</h3>
-              <p className="text-sm text-slate-400">Gérez plusieurs conversations isolées avec historique complet</p>
+              <h3 className="font-semibold mb-2">{t(language, "feature1")}</h3>
+              <p className="text-sm text-slate-400">{t(language, "feature1Desc")}</p>
             </div>
 
             <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300 transform hover:-translate-y-2">
               <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg mb-4" />
-              <h3 className="font-semibold mb-2">Données GBIF</h3>
-              <p className="text-sm text-slate-400">Explorez la biodiversité mondiale avec observations en temps réel</p>
+              <h3 className="font-semibold mb-2">{t(language, "feature2")}</h3>
+              <p className="text-sm text-slate-400">{t(language, "feature2Desc")}</p>
             </div>
 
             <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300 transform hover:-translate-y-2">
               <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg mb-4" />
-              <h3 className="font-semibold mb-2">Privé & Sécurisé</h3>
-              <p className="text-sm text-slate-400">Vos conversations sont isolées. Authentification personnelle.</p>
+              <h3 className="font-semibold mb-2">{t(language, "feature3")}</h3>
+              <p className="text-sm text-slate-400">{t(language, "feature3Desc")}</p>
             </div>
           </div>
         </div>
@@ -655,6 +694,11 @@ export default function App() {
     if (stored) {
       setCurrentUser(JSON.parse(stored));
     }
+    // Restaurer la langue depuis localStorage
+    const savedLanguage = localStorage.getItem("language") as "fr" | "en" | "es" | null;
+    if (savedLanguage) {
+      setLanguage(savedLanguage);
+    }
   }, []);
 
   useEffect(() => {
@@ -879,6 +923,9 @@ export default function App() {
 
   const updateSettings = async () => {
     try {
+      // Sauvegarder la langue en localStorage
+      localStorage.setItem("language", language);
+
       await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -938,7 +985,13 @@ export default function App() {
   };
 
   if (showLanding && !currentUser) {
-    return <LandingPage onGetStarted={() => setShowLanding(false)} />;
+    return (
+      <LandingPage
+        onGetStarted={() => setShowLanding(false)}
+        language={language}
+        setLanguage={setLanguage}
+      />
+    );
   }
 
   if (!currentUser) {
