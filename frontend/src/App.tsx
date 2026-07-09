@@ -492,6 +492,7 @@ function LoginScreen({
   setPin,
   error,
   onSubmit,
+  language,
 }: {
   mode: "login" | "register";
   setMode: (m: "login" | "register") => void;
@@ -501,6 +502,7 @@ function LoginScreen({
   setPin: (p: string) => void;
   error: string;
   onSubmit: () => void;
+  language: "fr" | "en" | "es";
 }) {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center overflow-hidden relative">
@@ -603,7 +605,7 @@ function LoginScreen({
                 mode === "login" ? "text-blue-400 active" : "text-slate-400 hover:text-slate-300"
               }`}
             >
-              Se connecter
+              {t(language, "loginTitle")}
             </button>
             <button
               onClick={() => setMode("register")}
@@ -611,31 +613,31 @@ function LoginScreen({
                 mode === "register" ? "text-blue-400 active" : "text-slate-400 hover:text-slate-300"
               }`}
             >
-              Créer un compte
+              {t(language, "registerTitle")}
             </button>
           </div>
 
           <div className="space-y-4 mb-6">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wide">Pseudo</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wide">{t(language, "pseudoLabel")}</label>
               <input
                 type="text"
                 value={pseudo}
                 onChange={(e) => setPseudo(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && onSubmit()}
-                placeholder="Votre identifiant"
+                placeholder={t(language, "pseudoPlaceholder")}
                 className="input-field w-full px-4 py-3 rounded-lg text-white outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wide">Code PIN</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wide">{t(language, "pinLabel")}</label>
               <input
                 type="number"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && onSubmit()}
-                placeholder="4-6 chiffres"
+                placeholder={t(language, "pinPlaceholder")}
                 maxLength={6}
                 className="input-field w-full px-4 py-3 rounded-lg text-white outline-none"
               />
@@ -652,7 +654,7 @@ function LoginScreen({
             onClick={onSubmit}
             className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold py-3 rounded-lg transition-all duration-300 shadow-lg hover:shadow-blue-500/50"
           >
-            {mode === "login" ? "Se connecter" : "Créer un compte"}
+            {mode === "login" ? t(language, "submitLogin") : t(language, "submitRegister")}
           </button>
         </div>
       </div>
@@ -786,6 +788,7 @@ export default function App() {
     setMessages([]);
     setConversations([]);
     setCurrentConvId("");
+    setShowLanding(true);
   };
 
   useEffect(() => {
@@ -1005,6 +1008,7 @@ export default function App() {
         setPin={setLoginPin}
         error={loginError}
         onSubmit={loginMode === "login" ? handleLogin : handleRegister}
+        language={language}
       />
     );
   }
@@ -1362,20 +1366,20 @@ placeholder={t(language, "placeholder")}
               </form>
 
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => setInput("plus")} disabled={loading} className="quick-command-btn">
-                  ➕ plus
+                <button onClick={() => setInput(language === "fr" ? "plus" : language === "es" ? "más" : "more")} disabled={loading} className="quick-command-btn">
+                  {t(language, "plusCmd")}
                 </button>
-                <button onClick={() => setInput("moins")} disabled={loading} className="quick-command-btn">
-                  ➖ moins
+                <button onClick={() => setInput(language === "fr" ? "moins" : language === "es" ? "menos" : "less")} disabled={loading} className="quick-command-btn">
+                  {t(language, "minusCmd")}
                 </button>
-                <button onClick={() => setInput("sois critique")} disabled={loading} className="quick-command-btn">
-                  ⚡ sois critique
+                <button onClick={() => setInput(language === "fr" ? "sois critique" : language === "es" ? "sé crítico" : "be critical")} disabled={loading} className="quick-command-btn">
+                  {t(language, "criticalCmd")}
                 </button>
-                <button onClick={() => setInput("help")} disabled={loading} className="quick-command-btn">
-                  ❓ help
+                <button onClick={() => setInput(language === "es" ? "ayuda" : "help")} disabled={loading} className="quick-command-btn">
+                  {t(language, "helpCmd")}
                 </button>
-                <button onClick={() => setInput("erase")} disabled={loading} className="quick-command-btn erase">
-                  🗑️ erase
+                <button onClick={() => setInput(language === "fr" ? "erase" : language === "es" ? "borrar" : "erase")} disabled={loading} className="quick-command-btn erase">
+                  {t(language, "eraseCmd")}
                 </button>
               </div>
             </div>

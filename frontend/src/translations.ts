@@ -50,6 +50,27 @@ export const translations = {
     feature3: "Privé & Sécurisé",
     feature3Desc: "Vos conversations sont isolées. Authentification personnelle.",
     statsTitle: "Statistiques",
+    // Login Screen
+    loginTitle: "Connexion",
+    registerTitle: "Créer un compte",
+    pseudoLabel: "Pseudo",
+    pseudoPlaceholder: "Entrez votre pseudo",
+    pinLabel: "PIN (4-6 chiffres)",
+    pinPlaceholder: "1234",
+    submitLogin: "Se connecter",
+    submitRegister: "Créer un compte",
+    switchToRegister: "Créer un compte",
+    switchToLogin: "Se connecter",
+    loginError: "Erreur de connexion",
+    // Raccourcis
+    plusCmd: "➕ plus",
+    minusCmd: "➖ moins",
+    criticalCmd: "⚡ critique",
+    helpCmd: "❓ help",
+    eraseCmd: "🗑️ erase",
+    // Messages
+    noConversation: "Aucune conversation active",
+    noPreviousAnswer: "Aucune réponse précédente",
   },
   en: {
     newConv: "+ New",
@@ -102,6 +123,27 @@ export const translations = {
     feature3: "Private & Secure",
     feature3Desc: "Your conversations are isolated. Personal authentication.",
     statsTitle: "Statistics",
+    // Login Screen
+    loginTitle: "Login",
+    registerTitle: "Create Account",
+    pseudoLabel: "Username",
+    pseudoPlaceholder: "Enter your username",
+    pinLabel: "PIN (4-6 digits)",
+    pinPlaceholder: "1234",
+    submitLogin: "Login",
+    submitRegister: "Create Account",
+    switchToRegister: "Create Account",
+    switchToLogin: "Login",
+    loginError: "Login error",
+    // Shortcuts
+    plusCmd: "➕ more",
+    minusCmd: "➖ less",
+    criticalCmd: "⚡ critical",
+    helpCmd: "❓ help",
+    eraseCmd: "🗑️ erase",
+    // Messages
+    noConversation: "No active conversation",
+    noPreviousAnswer: "No previous answer",
   },
   es: {
     newConv: "+ Nuevo",
@@ -154,6 +196,27 @@ export const translations = {
     feature3: "Privado y Seguro",
     feature3Desc: "Tus conversaciones están aisladas. Autenticación personal.",
     statsTitle: "Estadísticas",
+    // Login Screen
+    loginTitle: "Iniciar sesión",
+    registerTitle: "Crear cuenta",
+    pseudoLabel: "Usuario",
+    pseudoPlaceholder: "Ingrese su usuario",
+    pinLabel: "PIN (4-6 dígitos)",
+    pinPlaceholder: "1234",
+    submitLogin: "Iniciar sesión",
+    submitRegister: "Crear cuenta",
+    switchToRegister: "Crear cuenta",
+    switchToLogin: "Iniciar sesión",
+    loginError: "Error de inicio de sesión",
+    // Shortcuts
+    plusCmd: "➕ más",
+    minusCmd: "➖ menos",
+    criticalCmd: "⚡ crítico",
+    helpCmd: "❓ ayuda",
+    eraseCmd: "🗑️ borrar",
+    // Messages
+    noConversation: "Sin conversación activa",
+    noPreviousAnswer: "Sin respuesta anterior",
   }
 };
 

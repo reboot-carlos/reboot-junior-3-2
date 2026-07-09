@@ -576,7 +576,7 @@ def chat(request: ChatRequest) -> ChatResponse:
         raise ValueError("Message vide")
 
     # Commandes
-    if user_message.lower() == "help":
+    if user_message.lower() in ["help", "aide", "ayuda"]:
         if request.language == "en":
             response = """Available commands:
 — more : expand the previous answer
