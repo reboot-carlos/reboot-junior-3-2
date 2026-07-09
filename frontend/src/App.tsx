@@ -741,11 +741,21 @@ function ConvItem({
   onEditBlur: () => void;
   onEditKeyDown: (e: React.KeyboardEvent) => void;
 }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `conv:${conv.id}`,
+  });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `conv:${conv.id}` });
+
   return (
     <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
       onClick={() => onSelect(conv.id)}
       onContextMenu={(e) => onContextMenu(e, conv.id)}
-      className={`p-2 rounded cursor-pointer text-sm ${
+      className={`p-2 rounded cursor-move text-sm transition-all ${
+        isDragging ? "opacity-40" : ""
+      } ${isOver ? "ring-2 ring-blue-400" : ""} ${
         currentConvId === conv.id ? "bg-blue-600 text-white" : "bg-slate-700 hover:bg-slate-600"
       }`}
     >
@@ -793,11 +803,40 @@ function FolderTreeNode({
   onEditBlur: () => void;
   onEditKeyDown: (e: React.KeyboardEvent) => void;
 }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `folder:${node.folder.id}`,
+  });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `folder:${node.folder.id}` });
+
   return (
     <div>
-      <div className="flex items-center gap-2 px-2 py-1 text-xs font-semibold text-slate-300">
-        <span>📁 {node.folder.name}</span>
-        <span className="text-slate-500 text-xs">({node.conversations.length + node.children.length})</span>
+      <div
+        ref={setNodeRef}
+        {...attributes}
+        {...listeners}
+        className={`flex items-center justify-between px-2 py-1 text-xs font-semibold text-slate-300 hover:text-slate-100 rounded cursor-move transition-all ${
+          isDragging ? "opacity-40" : ""
+        } ${isOver ? "ring-2 ring-blue-400 bg-blue-500/10" : ""}`}
+      >
+        <div className="flex items-center gap-2 flex-1">
+          <span>📁 {node.folder.name}</span>
+          <span className="text-slate-500 text-xs">({node.conversations.length + node.children.length})</span>
+        </div>
+        <div className="flex gap-1">
+          <button
+            onClick={() => createFolder(`${node.folder.name} Sub`, node.folder.id)}
+            className="text-slate-400 hover:text-blue-400 text-xs px-1"
+            title={t(language, "subfolderBtn")}
+          >
+            ➕
+          </button>
+          <button
+            onClick={() => deleteFolder(node.folder.id)}
+            className="text-red-400 hover:text-red-300 text-xs px-1"
+          >
+            ✕
+          </button>
+        </div>
       </div>
       <div style={{ marginLeft: `${Math.min(node.depth + 1, 3) * 16}px` }} className="space-y-1">
         {/* Sous-dossiers */}
