@@ -50,6 +50,8 @@ export const translations = {
     feature3: "Privé & Sécurisé",
     feature3Desc: "Vos conversations sont isolées. Authentification personnelle.",
     statsTitle: "Statistiques",
+    // App Title
+    appTitle: "Chatbot Personnel",
     // Login Screen
     loginTitle: "Connexion",
     registerTitle: "Créer un compte",
@@ -123,6 +125,8 @@ export const translations = {
     feature3: "Private & Secure",
     feature3Desc: "Your conversations are isolated. Personal authentication.",
     statsTitle: "Statistics",
+    // App Title
+    appTitle: "Personal Chatbot",
     // Login Screen
     loginTitle: "Login",
     registerTitle: "Create Account",
@@ -196,6 +200,8 @@ export const translations = {
     feature3: "Privado y Seguro",
     feature3Desc: "Tus conversaciones están aisladas. Autenticación personal.",
     statsTitle: "Estadísticas",
+    // App Title
+    appTitle: "Chatbot Personal",
     // Login Screen
     loginTitle: "Iniciar sesión",
     registerTitle: "Crear cuenta",

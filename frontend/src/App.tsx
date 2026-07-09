@@ -493,6 +493,7 @@ function LoginScreen({
   error,
   onSubmit,
   language,
+  onBackToLanding,
 }: {
   mode: "login" | "register";
   setMode: (m: "login" | "register") => void;
@@ -503,6 +504,7 @@ function LoginScreen({
   error: string;
   onSubmit: () => void;
   language: "fr" | "en" | "es";
+  onBackToLanding: () => void;
 }) {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center overflow-hidden relative">
@@ -652,9 +654,16 @@ function LoginScreen({
 
           <button
             onClick={onSubmit}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold py-3 rounded-lg transition-all duration-300 shadow-lg hover:shadow-blue-500/50"
+            className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-semibold py-3 rounded-lg transition-all duration-300 shadow-lg hover:shadow-blue-500/50 mb-3"
           >
             {mode === "login" ? t(language, "submitLogin") : t(language, "submitRegister")}
+          </button>
+
+          <button
+            onClick={onBackToLanding}
+            className="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white font-semibold py-3 rounded-lg transition-all duration-300"
+          >
+            ← {language === "fr" ? "Retour" : language === "es" ? "Volver" : "Back"}
           </button>
         </div>
       </div>
@@ -1009,6 +1018,7 @@ export default function App() {
         error={loginError}
         onSubmit={loginMode === "login" ? handleLogin : handleRegister}
         language={language}
+        onBackToLanding={() => setShowLanding(true)}
       />
     );
   }
@@ -1231,7 +1241,7 @@ export default function App() {
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-slate-700 rounded-lg">
             ☰
           </button>
-          <h1 className="text-2xl font-bold">Chatbot Personnel</h1>
+          <h1 className="text-2xl font-bold">{t(language, "appTitle")}</h1>
           <div className="flex gap-2 items-center">
             <button
               onClick={() => setTab("chat")}
