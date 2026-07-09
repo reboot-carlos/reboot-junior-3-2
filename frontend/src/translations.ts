@@ -53,6 +53,8 @@ export const translations = {
     // App Title
     appTitle: "Chatbot Personnel",
     // Login Screen
+    loginScreenTitle: "Chatbot Personnel",
+    loginScreenSubtitle: "Connectez-vous pour continuer",
     loginTitle: "Connexion",
     registerTitle: "Créer un compte",
     pseudoLabel: "Pseudo",
@@ -128,6 +130,8 @@ export const translations = {
     // App Title
     appTitle: "Personal Chatbot",
     // Login Screen
+    loginScreenTitle: "Personal Chatbot",
+    loginScreenSubtitle: "Login to continue",
     loginTitle: "Login",
     registerTitle: "Create Account",
     pseudoLabel: "Username",
@@ -203,6 +207,8 @@ export const translations = {
     // App Title
     appTitle: "Chatbot Personal",
     // Login Screen
+    loginScreenTitle: "Chatbot Personal",
+    loginScreenSubtitle: "Inicia sesión para continuar",
     loginTitle: "Iniciar sesión",
     registerTitle: "Crear cuenta",
     pseudoLabel: "Usuario",

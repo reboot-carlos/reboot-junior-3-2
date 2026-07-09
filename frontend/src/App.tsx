@@ -596,9 +596,9 @@ function LoginScreen({
 
         <div className="login-card p-8 rounded-2xl">
           <h1 className="text-3xl font-bold text-center mb-2 bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">
-            Chatbot Personnel
+            {t(language, "loginScreenTitle")}
           </h1>
-          <p className="text-center text-sm text-slate-400 mb-8">Connectez-vous pour continuer</p>
+          <p className="text-center text-sm text-slate-400 mb-8">{t(language, "loginScreenSubtitle")}</p>
 
           <div className="flex gap-4 mb-8 border-b border-slate-700">
             <button
