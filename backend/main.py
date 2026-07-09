@@ -77,6 +77,11 @@ class AuthResponse(BaseModel):
     user_id: str
     pseudo: str
 
+class FolderCreate(BaseModel):
+    name: str
+    parent_id: str | None = None
+    user_id: str
+
 # ============================================================================
 # Authentification & Base de données
 # ============================================================================
@@ -90,6 +95,15 @@ def init_db():
             id TEXT PRIMARY KEY,
             pseudo TEXT UNIQUE NOT NULL,
             pin_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS folders (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            parent_id TEXT,
+            user_id TEXT NOT NULL,
             created_at TEXT NOT NULL
         )
     """)
@@ -134,6 +148,39 @@ def verify_user(pseudo: str, pin: str) -> str:
     if not result:
         raise ValueError("Pseudo ou PIN invalide")
     return result[0]
+
+def load_folders(user_id: str) -> list:
+    """Charge tous les dossiers d'un utilisateur."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, name, parent_id, user_id, created_at FROM folders WHERE user_id = ? ORDER BY created_at",
+        (user_id,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {"id": r[0], "name": r[1], "parent_id": r[2], "user_id": r[3], "created_at": r[4]}
+        for r in rows
+    ]
+
+def get_folder_depth(folder_id: str, conn) -> int:
+    """Calcule la profondeur d'un dossier en remontant la chaîne parent."""
+    depth = 0
+    current_id = folder_id
+    visited = set()
+    while current_id:
+        if current_id in visited:
+            break
+        visited.add(current_id)
+        cursor = conn.cursor()
+        cursor.execute("SELECT parent_id FROM folders WHERE id = ?", (current_id,))
+        row = cursor.fetchone()
+        if not row:
+            break
+        current_id = row[0]
+        depth += 1
+    return depth
 
 # ============================================================================
 # Prompt système
@@ -311,7 +358,12 @@ Sois plus accessible et encourageant.
 def load_conversations_index() -> dict:
     if CONVERSATIONS_INDEX.exists():
         with open(CONVERSATIONS_INDEX) as f:
-            return json.load(f)
+            data = json.load(f)
+        # Migration: ajouter le champ folder aux conversations qui ne l'ont pas
+        for conv in data.get("conversations", []):
+            if "folder" not in conv:
+                conv["folder"] = None
+        return data
     return {"conversations": []}
 
 def save_conversations_index(data: dict):
@@ -327,7 +379,7 @@ def create_conversation(title: str, user_id: str = None) -> str:
     (conv_dir / "history.json").write_text("[]")
     (conv_dir / "memory.json").write_text(json.dumps({"important_facts": []}))
 
-    metadata = {"id": conv_id, "title": title, "created_at": now, "updated_at": now, "tags": [], "user_id": user_id}
+    metadata = {"id": conv_id, "title": title, "created_at": now, "updated_at": now, "tags": [], "user_id": user_id, "folder": None}
     (conv_dir / "metadata.json").write_text(json.dumps(metadata, indent=2, ensure_ascii=False))
 
     index = load_conversations_index()
@@ -561,12 +613,121 @@ def delete_conv(conv_id: str):
 def update_conv(conv_id: str, request: dict):
     if "title" in request:
         rename_conversation(conv_id, request["title"])
+    if "folder" in request:
+        # Persister le folder dans metadata.json et l'index
+        new_folder = request["folder"]
+        metadata_file = get_conversation_dir(conv_id) / "metadata.json"
+        if metadata_file.exists():
+            with open(metadata_file) as f:
+                metadata = json.load(f)
+            metadata["folder"] = new_folder
+            with open(metadata_file, "w") as f:
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+        index = load_conversations_index()
+        for conv in index["conversations"]:
+            if conv["id"] == conv_id:
+                conv["folder"] = new_folder
+                break
+        save_conversations_index(index)
     return {"status": "ok"}
 
 @app.get("/api/conversations/{conv_id}/messages")
 def get_messages(conv_id: str):
     history = load_conversation_history(conv_id)
     return {"messages": history}
+
+# ============================================================================
+# Routes pour les dossiers (arborescence)
+# ============================================================================
+
+@app.get("/api/folders")
+def list_folders(user_id: str):
+    """Retourne la liste plate des dossiers (le frontend construit l'arbre)."""
+    return {"folders": load_folders(user_id)}
+
+@app.post("/api/folders")
+def create_folder(request: FolderCreate):
+    """Crée un nouveau dossier. Refuse si depth > 5."""
+    folder_id = str(uuid.uuid4())[:8]
+    now = datetime.now().isoformat()
+    conn = sqlite3.connect(DB_FILE)
+
+    # Vérifier la profondeur si parent_id fourni
+    if request.parent_id:
+        depth = get_folder_depth(request.parent_id, conn)
+        if depth >= 4:  # parent à depth 4 → enfant serait depth 5, max autorisé
+            conn.close()
+            raise HTTPException(status_code=400, detail="Profondeur maximale de 5 niveaux atteinte")
+
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO folders (id, name, parent_id, user_id, created_at) VALUES (?, ?, ?, ?, ?)",
+        (folder_id, request.name, request.parent_id, request.user_id, now)
+    )
+    conn.commit()
+    conn.close()
+    return {"id": folder_id, "name": request.name, "parent_id": request.parent_id, "user_id": request.user_id, "created_at": now}
+
+@app.delete("/api/folders/{folder_id}")
+def delete_folder(folder_id: str):
+    """Supprime un dossier. Les sous-dossiers et conversations remontent au parent."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    # Récupérer le parent du dossier supprimé
+    cursor.execute("SELECT parent_id FROM folders WHERE id = ?", (folder_id,))
+    row = cursor.fetchone()
+    parent_id = row[0] if row else None
+
+    # Remonter les sous-dossiers au parent
+    cursor.execute("UPDATE folders SET parent_id = ? WHERE parent_id = ?", (parent_id, folder_id))
+    # Supprimer le dossier
+    cursor.execute("DELETE FROM folders WHERE id = ?", (folder_id,))
+    conn.commit()
+    conn.close()
+
+    # Remonter les conversations de ce dossier
+    index = load_conversations_index()
+    for conv in index["conversations"]:
+        if conv.get("folder") == folder_id:
+            conv["folder"] = parent_id
+
+    # Mettre à jour les metadata.json des conversations affectées
+    for conv in index["conversations"]:
+        if conv.get("folder") == parent_id and conv["id"]:  # conversations remontées
+            meta_file = get_conversation_dir(conv["id"]) / "metadata.json"
+            if meta_file.exists():
+                with open(meta_file) as f:
+                    meta = json.load(f)
+                meta["folder"] = parent_id
+                with open(meta_file, "w") as f:
+                    json.dump(meta, f, indent=2, ensure_ascii=False)
+
+    save_conversations_index(index)
+    return {"status": "deleted"}
+
+@app.patch("/api/folders/{folder_id}")
+def update_folder(folder_id: str, request: dict):
+    """Renomme OU change le parent_id d'un dossier."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    if "name" in request:
+        cursor.execute("UPDATE folders SET name = ? WHERE id = ?", (request["name"], folder_id))
+
+    if "parent_id" in request:
+        new_parent = request["parent_id"]  # peut être None
+        if new_parent:
+            depth = get_folder_depth(new_parent, conn)
+            if depth >= 4:
+                conn.close()
+                raise HTTPException(status_code=400, detail="Profondeur maximale atteinte")
+        cursor.execute("UPDATE folders SET parent_id = ? WHERE id = ?", (new_parent, folder_id))
+
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
 
 @app.post("/api/chat")
 def chat(request: ChatRequest) -> ChatResponse:
