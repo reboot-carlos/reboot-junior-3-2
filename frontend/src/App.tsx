@@ -1275,7 +1275,7 @@ export default function App() {
     setActiveDragItem(item);
   };
 
-  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+  const handleDragEnd = async ({ active, over }: DragEndEvent) => {
     setActiveDragItem(null);
     if (!over) return;
 
@@ -1284,18 +1284,28 @@ export default function App() {
 
     if (!dragged) return;
 
-    // Dropping onto root drop zone
-    if (over.id === "root-drop") {
-      if (dragged.type === "conversation") moveConversationToFolder(dragged.id, null);
-      if (dragged.type === "folder") moveFolderToParent(dragged.id, null);
-      return;
-    }
-
-    if (target?.type === "folder") {
-      if (dragged.type === "conversation") moveConversationToFolder(dragged.id, target.id);
-      if (dragged.type === "folder" && dragged.id !== target.id) {
-        moveFolderToParent(dragged.id, target.id);
+    try {
+      // Dropping onto root drop zone
+      if (over.id === "root-drop") {
+        if (dragged.type === "conversation") await moveConversationToFolder(dragged.id, null);
+        if (dragged.type === "folder") await moveFolderToParent(dragged.id, null);
+        await loadConversations();
+        await loadFolders();
+        return;
       }
+
+      if (target?.type === "folder") {
+        if (dragged.type === "conversation") {
+          await moveConversationToFolder(dragged.id, target.id);
+          await loadConversations();
+        }
+        if (dragged.type === "folder" && dragged.id !== target.id) {
+          await moveFolderToParent(dragged.id, target.id);
+          await loadFolders();
+        }
+      }
+    } catch (err) {
+      console.error("Drop error:", err);
     }
   };
 
