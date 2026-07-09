@@ -720,32 +720,116 @@ function RootDropZone() {
   );
 }
 
-function ConvItem({ conv }: { conv: Conversation }) {
-  // Composant minimal sans DnD pour l'instant (sera amélioré)
+function ConvItem({
+  conv,
+  currentConvId,
+  onSelect,
+  onContextMenu,
+  editingConvId,
+  editingTitle,
+  onEditChange,
+  onEditBlur,
+  onEditKeyDown
+}: {
+  conv: Conversation;
+  currentConvId: string;
+  onSelect: (id: string) => void;
+  onContextMenu: (e: React.MouseEvent, convId: string) => void;
+  editingConvId: string;
+  editingTitle: string;
+  onEditChange: (value: string) => void;
+  onEditBlur: () => void;
+  onEditKeyDown: (e: React.KeyboardEvent) => void;
+}) {
   return (
-    <div className="p-2 rounded cursor-pointer text-sm bg-slate-700 hover:bg-slate-600">
-      <div className="font-medium truncate">{conv.title}</div>
-      <div className="text-xs opacity-60">{new Date(conv.created_at).toLocaleDateString()}</div>
+    <div
+      onClick={() => onSelect(conv.id)}
+      onContextMenu={(e) => onContextMenu(e, conv.id)}
+      className={`p-2 rounded cursor-pointer text-sm ${
+        currentConvId === conv.id ? "bg-blue-600 text-white" : "bg-slate-700 hover:bg-slate-600"
+      }`}
+    >
+      {editingConvId === conv.id ? (
+        <input
+          type="text"
+          value={editingTitle}
+          onChange={(e) => onEditChange(e.target.value)}
+          onBlur={onEditBlur}
+          onKeyDown={onEditKeyDown}
+          autoFocus
+          className="w-full bg-slate-600 text-white px-1 rounded"
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <>
+          <div className="font-medium truncate">{conv.title}</div>
+          <div className="text-xs opacity-60">{new Date(conv.created_at).toLocaleDateString()}</div>
+        </>
+      )}
     </div>
   );
 }
 
-function FolderTreeNode({ node, language }: { node: FolderNode; language: "fr" | "en" | "es" }) {
-  // Affichage simple de l'arborescence pour l'instant
+function FolderTreeNode({
+  node,
+  language,
+  currentConvId,
+  onSelectConv,
+  onContextMenu,
+  editingConvId,
+  editingTitle,
+  onEditChange,
+  onEditBlur,
+  onEditKeyDown
+}: {
+  node: FolderNode;
+  language: "fr" | "en" | "es";
+  currentConvId: string;
+  onSelectConv: (id: string) => void;
+  onContextMenu: (e: React.MouseEvent, convId: string) => void;
+  editingConvId: string;
+  editingTitle: string;
+  onEditChange: (value: string) => void;
+  onEditBlur: () => void;
+  onEditKeyDown: (e: React.KeyboardEvent) => void;
+}) {
   return (
     <div>
       <div className="flex items-center gap-2 px-2 py-1 text-xs font-semibold text-slate-300">
         <span>📁 {node.folder.name}</span>
         <span className="text-slate-500 text-xs">({node.conversations.length + node.children.length})</span>
       </div>
-      <div style={{ marginLeft: `${Math.min(node.depth, 3) * 16}px` }} className="space-y-1">
+      <div style={{ marginLeft: `${Math.min(node.depth + 1, 3) * 16}px` }} className="space-y-1">
         {/* Sous-dossiers */}
         {node.children.map((child) => (
-          <FolderTreeNode key={child.folder.id} node={child} language={language} />
+          <FolderTreeNode
+            key={child.folder.id}
+            node={child}
+            language={language}
+            currentConvId={currentConvId}
+            onSelectConv={onSelectConv}
+            onContextMenu={onContextMenu}
+            editingConvId={editingConvId}
+            editingTitle={editingTitle}
+            onEditChange={onEditChange}
+            onEditBlur={onEditBlur}
+            onEditKeyDown={onEditKeyDown}
+          />
         ))}
         {/* Conversations dans ce dossier */}
         {node.conversations.map((conv) => (
-          <ConvItem key={conv.id} conv={conv} />
+          <ConvItem
+            key={conv.id}
+            conv={conv}
+            currentConvId={currentConvId}
+            onSelect={onSelectConv}
+            onContextMenu={onContextMenu}
+            editingConvId={editingConvId}
+            editingTitle={editingTitle}
+            onEditChange={onEditChange}
+            onEditBlur={onEditBlur}
+            onEditKeyDown={onEditKeyDown}
+          />
         ))}
         {/* État vide */}
         {node.conversations.length === 0 && node.children.length === 0 && (
@@ -1254,7 +1338,34 @@ export default function App() {
 
             {/* Dossiers avec arborescence */}
             {buildFolderTree(folders, conversations).map((node) => (
-              <FolderTreeNode key={node.folder.id} node={node} language={language} />
+              <FolderTreeNode
+                key={node.folder.id}
+                node={node}
+                language={language}
+                currentConvId={currentConvId}
+                onSelectConv={setCurrentConvId}
+                onContextMenu={(e, convId) => {
+                  e.preventDefault();
+                  setContextMenu({ x: e.clientX, y: e.clientY, convId });
+                }}
+                editingConvId={editingConvId}
+                editingTitle={editingTitle}
+                onEditChange={setEditingTitle}
+                onEditBlur={() => {
+                  if (editingTitle.trim()) {
+                    renameConversation(editingConvId, editingTitle);
+                  }
+                  setEditingConvId("");
+                }}
+                onEditKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (editingTitle.trim()) {
+                      renameConversation(editingConvId, editingTitle);
+                    }
+                    setEditingConvId("");
+                  }
+                }}
+              />
             ))}
 
             {/* Conversations sans dossier */}
@@ -1263,7 +1374,33 @@ export default function App() {
                 <div className="px-2 py-1 text-xs font-semibold text-slate-300">{t(language, "noFolder")}</div>
                 <div className="space-y-1">
                   {conversations.filter((c) => c.folder === null).map((conv) => (
-                    <ConvItem key={conv.id} conv={conv} />
+                    <ConvItem
+                      key={conv.id}
+                      conv={conv}
+                      currentConvId={currentConvId}
+                      onSelect={setCurrentConvId}
+                      onContextMenu={(e, convId) => {
+                        e.preventDefault();
+                        setContextMenu({ x: e.clientX, y: e.clientY, convId });
+                      }}
+                      editingConvId={editingConvId}
+                      editingTitle={editingTitle}
+                      onEditChange={setEditingTitle}
+                      onEditBlur={() => {
+                        if (editingTitle.trim()) {
+                          renameConversation(editingConvId, editingTitle);
+                        }
+                        setEditingConvId("");
+                      }}
+                      onEditKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          if (editingTitle.trim()) {
+                            renameConversation(editingConvId, editingTitle);
+                          }
+                          setEditingConvId("");
+                        }
+                      }}
+                    />
                   ))}
                 </div>
               </div>
