@@ -18,6 +18,13 @@ interface Conversation {
   updated_at: string;
   tags: string[];
   user_id?: string;
+  folder?: string;
+}
+
+interface Folder {
+  id: string;
+  name: string;
+  user_id?: string;
 }
 
 interface User {
@@ -614,7 +621,10 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [currentConvId, setCurrentConvId] = useState<string>("");
+  const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<Tab>("chat");
@@ -718,6 +728,11 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Annuler la requête en cours si on change de conversation
+    if (loading && abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setLoading(false);
+    }
     if (currentConvId) loadMessages();
   }, [currentConvId]);
 
@@ -780,6 +795,7 @@ export default function App() {
     }
 
     const userMessage = input;
+    const convIdAtSend = currentConvId;
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
     setLoading(true);
@@ -790,15 +806,20 @@ export default function App() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage, conversation_id: currentConvId, user_id: currentUser?.id }),
+        body: JSON.stringify({ message: userMessage, conversation_id: convIdAtSend, user_id: currentUser?.id }),
         signal: abortControllerRef.current.signal,
       });
       const data: ChatResponse = await res.json();
-      setMessages((prev) => [...prev, { role: "assistant", content: data.response }]);
+      // Vérifier que l'utilisateur n'a pas changé de conversation
+      if (currentConvId === convIdAtSend) {
+        setMessages((prev) => [...prev, { role: "assistant", content: data.response }]);
+      }
       if (data.conversation_id) {
         setCurrentConvId(data.conversation_id);
         await loadConversations();
       }
+      // Mettre à jour l'historique
+      await loadHistory();
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
         console.log("Requête annulée");
@@ -868,6 +889,25 @@ export default function App() {
     }
   };
 
+  const createFolder = async () => {
+    if (!currentUser || !newFolderName.trim()) return;
+    const folderId = `folder-${Date.now()}`;
+    const newFolder: Folder = { id: folderId, name: newFolderName, user_id: currentUser.id };
+    setFolders([...folders, newFolder]);
+    setNewFolderName("");
+    setShowNewFolderInput(false);
+  };
+
+  const deleteFolder = async (folderId: string) => {
+    setFolders(folders.filter((f) => f.id !== folderId));
+    // Enlever le dossier des conversations dans ce dossier
+    setConversations(conversations.map((c) => c.folder === folderId ? { ...c, folder: undefined } : c));
+  };
+
+  const moveConversationToFolder = (convId: string, folderId: string | null) => {
+    setConversations(conversations.map((c) => c.id === convId ? { ...c, folder: folderId || undefined } : c));
+  };
+
   if (showLanding && !currentUser) {
     return <LandingPage onGetStarted={() => setShowLanding(false)} />;
   }
@@ -895,59 +935,153 @@ export default function App() {
           sidebarOpen ? "w-1/6" : "w-0"
         } transition-all duration-300 border-r border-slate-700 flex flex-col overflow-hidden`}
       >
-        <div className="p-4 border-b border-slate-700">
+        <div className="p-4 border-b border-slate-700 space-y-2">
           <button
             onClick={() => createNewConversation("Nouvelle conversation")}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-semibold"
           >
             + Nouveau
           </button>
+          <button
+            onClick={() => setShowNewFolderInput(!showNewFolderInput)}
+            className="w-full bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm font-semibold"
+          >
+            📁 Dossier
+          </button>
+          {showNewFolderInput && (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="Nom du dossier..."
+                className="flex-1 px-2 py-1 rounded text-xs bg-slate-700 text-white"
+              />
+              <button
+                onClick={createFolder}
+                className="px-2 py-1 rounded text-xs bg-green-600 hover:bg-green-700 text-white"
+              >
+                ✓
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-2 space-y-1" onClick={() => setContextMenu(null)}>
-          {conversations.map((conv) => (
-            <div
-              key={conv.id}
-              onClick={() => setCurrentConvId(conv.id)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setContextMenu({ x: e.clientX, y: e.clientY, convId: conv.id });
-              }}
-              className={`p-2 rounded cursor-pointer text-sm ${
-                currentConvId === conv.id ? "bg-blue-600 text-white" : "bg-slate-700 hover:bg-slate-600"
-              }`}
-            >
-              {editingConvId === conv.id ? (
-                <input
-                  type="text"
-                  value={editingTitle}
-                  onChange={(e) => setEditingTitle(e.target.value)}
-                  onBlur={() => {
-                    if (editingTitle.trim()) {
-                      renameConversation(conv.id, editingTitle);
-                    }
-                    setEditingConvId(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      if (editingTitle.trim()) {
-                        renameConversation(conv.id, editingTitle);
-                      }
-                      setEditingConvId(null);
-                    }
-                  }}
-                  autoFocus
-                  className="w-full bg-slate-600 text-white px-1 rounded"
-                  onClick={(e) => e.stopPropagation()}
-                />
-              ) : (
-                <>
-                  <div className="font-medium truncate">{conv.title}</div>
-                  <div className="text-xs opacity-60">{new Date(conv.created_at).toLocaleDateString()}</div>
-                </>
-              )}
+          {/* Afficher les dossiers */}
+          {folders.map((folder) => {
+            const convsInFolder = conversations.filter((c) => c.folder === folder.id);
+            return (
+              <div key={folder.id}>
+                <div className="flex items-center justify-between px-2 py-1 text-xs font-semibold text-slate-300 hover:text-slate-100">
+                  <span>📁 {folder.name} ({convsInFolder.length})</span>
+                  <button
+                    onClick={() => deleteFolder(folder.id)}
+                    className="text-red-400 hover:text-red-300 text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="ml-2 space-y-1">
+                  {convsInFolder.map((conv) => (
+                    <div
+                      key={conv.id}
+                      onClick={() => setCurrentConvId(conv.id)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenu({ x: e.clientX, y: e.clientY, convId: conv.id });
+                      }}
+                      className={`p-2 rounded cursor-pointer text-sm ${
+                        currentConvId === conv.id ? "bg-blue-600 text-white" : "bg-slate-700 hover:bg-slate-600"
+                      }`}
+                    >
+                      {editingConvId === conv.id ? (
+                        <input
+                          type="text"
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          onBlur={() => {
+                            if (editingTitle.trim()) {
+                              renameConversation(conv.id, editingTitle);
+                            }
+                            setEditingConvId(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              if (editingTitle.trim()) {
+                                renameConversation(conv.id, editingTitle);
+                              }
+                              setEditingConvId(null);
+                            }
+                          }}
+                          autoFocus
+                          className="w-full bg-slate-600 text-white px-1 rounded"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <>
+                          <div className="font-medium truncate">{conv.title}</div>
+                          <div className="text-xs opacity-60">{new Date(conv.created_at).toLocaleDateString()}</div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Conversations sans dossier */}
+          {conversations.filter((c) => !c.folder).length > 0 && (
+            <div>
+              <div className="px-2 py-1 text-xs font-semibold text-slate-300">📄 Sans dossier</div>
+              <div className="space-y-1">
+                {conversations.filter((c) => !c.folder).map((conv) => (
+                  <div
+                    key={conv.id}
+                    onClick={() => setCurrentConvId(conv.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setContextMenu({ x: e.clientX, y: e.clientY, convId: conv.id });
+                    }}
+                    className={`p-2 rounded cursor-pointer text-sm ${
+                      currentConvId === conv.id ? "bg-blue-600 text-white" : "bg-slate-700 hover:bg-slate-600"
+                    }`}
+                  >
+                    {editingConvId === conv.id ? (
+                      <input
+                        type="text"
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onBlur={() => {
+                          if (editingTitle.trim()) {
+                            renameConversation(conv.id, editingTitle);
+                          }
+                          setEditingConvId(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            if (editingTitle.trim()) {
+                              renameConversation(conv.id, editingTitle);
+                            }
+                            setEditingConvId(null);
+                          }
+                        }}
+                        autoFocus
+                        className="w-full bg-slate-600 text-white px-1 rounded"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <>
+                        <div className="font-medium truncate">{conv.title}</div>
+                        <div className="text-xs opacity-60">{new Date(conv.created_at).toLocaleDateString()}</div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
         </div>
 
         {contextMenu && (
@@ -966,12 +1100,37 @@ export default function App() {
             >
               ✏️ Renommer
             </button>
+            {/* Sous-menu déplacer vers dossier */}
+            <div className="border-t border-slate-600">
+              <div className="px-4 py-2 text-xs font-semibold text-slate-300">📁 Déplacer vers:</div>
+              <button
+                onClick={() => {
+                  moveConversationToFolder(contextMenu.convId, null);
+                  setContextMenu(null);
+                }}
+                className="block w-full text-left px-6 py-1 hover:bg-slate-600 text-xs text-slate-200"
+              >
+                Aucun dossier
+              </button>
+              {folders.map((folder) => (
+                <button
+                  key={folder.id}
+                  onClick={() => {
+                    moveConversationToFolder(contextMenu.convId, folder.id);
+                    setContextMenu(null);
+                  }}
+                  className="block w-full text-left px-6 py-1 hover:bg-slate-600 text-xs text-slate-200"
+                >
+                  {folder.name}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => {
                 deleteConversation(contextMenu.convId);
                 setContextMenu(null);
               }}
-              className="block w-full text-left px-4 py-2 hover:bg-red-900 text-sm text-red-300"
+              className="block w-full text-left px-4 py-2 hover:bg-red-900 text-sm text-red-300 border-t border-slate-600"
             >
               🗑️ Supprimer
             </button>
