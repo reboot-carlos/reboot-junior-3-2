@@ -35,7 +35,7 @@ body {
 }
 
 .message-assistant {
-  @apply bg-slate-800 text-slate-50 rounded-2xl rounded-bl-none border border-slate-700 shadow-md;
+  @apply bg-slate-700 text-slate-50 rounded-2xl rounded-bl-none border border-slate-600 shadow-lg;
   animation: slideInLeft 0.3s ease-out;
 }
 
