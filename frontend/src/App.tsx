@@ -744,7 +744,6 @@ function ConvItem({
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `conv:${conv.id}`,
   });
-  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `conv:${conv.id}` });
 
   return (
     <div
@@ -753,9 +752,9 @@ function ConvItem({
       {...listeners}
       onClick={() => onSelect(conv.id)}
       onContextMenu={(e) => onContextMenu(e, conv.id)}
-      className={`p-2 rounded cursor-move text-sm transition-all ${
+      className={`p-2 rounded cursor-move text-base transition-all ${
         isDragging ? "opacity-40" : ""
-      } ${isOver ? "ring-2 ring-blue-400" : ""} ${
+      } ${
         currentConvId === conv.id ? "bg-blue-600 text-white" : "bg-slate-700 hover:bg-slate-600"
       }`}
     >
@@ -790,7 +789,10 @@ function FolderTreeNode({
   editingTitle,
   onEditChange,
   onEditBlur,
-  onEditKeyDown
+  onEditKeyDown,
+  expandedFolders,
+  setExpandedFolders,
+  onContextMenuFolder,
 }: {
   node: FolderNode;
   language: "fr" | "en" | "es";
@@ -802,79 +804,106 @@ function FolderTreeNode({
   onEditChange: (value: string) => void;
   onEditBlur: () => void;
   onEditKeyDown: (e: React.KeyboardEvent) => void;
+  expandedFolders: Set<string>;
+  setExpandedFolders: (folders: Set<string>) => void;
+  onContextMenuFolder: (e: React.MouseEvent, folderId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `folder:${node.folder.id}`,
   });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `folder:${node.folder.id}` });
 
+  const mergeRefs = (draggableRef: any, droppableRef: any) => (el: any) => {
+    draggableRef(el);
+    droppableRef(el);
+  };
+
+  const isExpanded = expandedFolders.has(node.folder.id);
+  const toggleExpand = () => {
+    const newExpanded = new Set(expandedFolders);
+    if (newExpanded.has(node.folder.id)) {
+      newExpanded.delete(node.folder.id);
+    } else {
+      newExpanded.add(node.folder.id);
+    }
+    setExpandedFolders(newExpanded);
+  };
+
+  const totalItems = node.conversations.length + node.children.length;
+
   return (
     <div>
-      <div
-        ref={setNodeRef}
-        {...attributes}
-        {...listeners}
-        className={`flex items-center justify-between px-2 py-1 text-xs font-semibold text-slate-300 hover:text-slate-100 rounded cursor-move transition-all ${
-          isDragging ? "opacity-40" : ""
-        } ${isOver ? "ring-2 ring-blue-400 bg-blue-500/10" : ""}`}
-      >
-        <div className="flex items-center gap-2 flex-1">
+      <div className="flex items-center gap-0">
+        {/* Chevron - NOT draggable */}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleExpand();
+          }}
+          className="text-slate-400 hover:text-slate-200 transition-transform duration-200 w-6 flex items-center justify-center flex-shrink-0"
+          style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+        >
+          ▸
+        </button>
+
+        {/* Folder header - DRAGGABLE */}
+        <div
+          ref={mergeRefs(setNodeRef, setDropRef)}
+          {...attributes}
+          {...listeners}
+          onContextMenu={(e) => onContextMenuFolder(e, node.folder.id)}
+          className={`flex items-center gap-2 flex-1 px-2 py-1 text-base font-bold text-slate-300 hover:text-slate-100 rounded cursor-move transition-all ${
+            isDragging ? "opacity-40" : ""
+          } ${isOver ? "ring-2 ring-green-400 bg-green-500/20 animate-pulse" : ""}`}
+        >
           <span>📁 {node.folder.name}</span>
-          <span className="text-slate-500 text-xs">({node.conversations.length + node.children.length})</span>
-        </div>
-        <div className="flex gap-1">
-          <button
-            onClick={() => createFolder(`${node.folder.name} Sub`, node.folder.id)}
-            className="text-slate-400 hover:text-blue-400 text-xs px-1"
-            title={t(language, "subfolderBtn")}
-          >
-            ➕
-          </button>
-          <button
-            onClick={() => deleteFolder(node.folder.id)}
-            className="text-red-400 hover:text-red-300 text-xs px-1"
-          >
-            ✕
-          </button>
+          <span className="text-slate-500 text-sm font-normal">({totalItems})</span>
         </div>
       </div>
-      <div style={{ marginLeft: `${Math.min(node.depth + 1, 3) * 16}px` }} className="space-y-1">
-        {/* Sous-dossiers */}
-        {node.children.map((child) => (
-          <FolderTreeNode
-            key={child.folder.id}
-            node={child}
-            language={language}
-            currentConvId={currentConvId}
-            onSelectConv={onSelectConv}
-            onContextMenu={onContextMenu}
-            editingConvId={editingConvId}
-            editingTitle={editingTitle}
-            onEditChange={onEditChange}
-            onEditBlur={onEditBlur}
-            onEditKeyDown={onEditKeyDown}
-          />
-        ))}
-        {/* Conversations dans ce dossier */}
-        {node.conversations.map((conv) => (
-          <ConvItem
-            key={conv.id}
-            conv={conv}
-            currentConvId={currentConvId}
-            onSelect={onSelectConv}
-            onContextMenu={onContextMenu}
-            editingConvId={editingConvId}
-            editingTitle={editingTitle}
-            onEditChange={onEditChange}
-            onEditBlur={onEditBlur}
-            onEditKeyDown={onEditKeyDown}
-          />
-        ))}
-        {/* État vide */}
-        {node.conversations.length === 0 && node.children.length === 0 && (
-          <div className="text-xs text-slate-600 italic px-2">{t(language, "emptyFolder")}</div>
-        )}
-      </div>
+
+      {isExpanded && (
+        <div style={{ marginLeft: `${Math.min(node.depth + 1, 3) * 16}px` }} className="space-y-1">
+          {/* Sous-dossiers */}
+          {node.children.map((child) => (
+            <FolderTreeNode
+              key={child.folder.id}
+              node={child}
+              language={language}
+              currentConvId={currentConvId}
+              onSelectConv={onSelectConv}
+              onContextMenu={onContextMenu}
+              editingConvId={editingConvId}
+              editingTitle={editingTitle}
+              onEditChange={onEditChange}
+              onEditBlur={onEditBlur}
+              onEditKeyDown={onEditKeyDown}
+              expandedFolders={expandedFolders}
+              setExpandedFolders={setExpandedFolders}
+              onContextMenuFolder={onContextMenuFolder}
+            />
+          ))}
+          {/* Conversations dans ce dossier */}
+          {node.conversations.map((conv) => (
+            <ConvItem
+              key={conv.id}
+              conv={conv}
+              currentConvId={currentConvId}
+              onSelect={onSelectConv}
+              onContextMenu={onContextMenu}
+              editingConvId={editingConvId}
+              editingTitle={editingTitle}
+              onEditChange={onEditChange}
+              onEditBlur={onEditBlur}
+              onEditKeyDown={onEditKeyDown}
+            />
+          ))}
+          {/* État vide */}
+          {totalItems === 0 && (
+            <div className="text-xs text-slate-600 italic px-2">{t(language, "emptyFolder")}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -893,7 +922,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<Tab>("chat");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; convId: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; convId?: string; folderId?: string } | null>(null);
   const [editingConvId, setEditingConvId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -1277,16 +1306,27 @@ export default function App() {
 
   const handleDragEnd = async ({ active, over }: DragEndEvent) => {
     setActiveDragItem(null);
-    if (!over) return;
+    if (!over) {
+      console.log("No drop target");
+      return;
+    }
+
+    console.log("Drop detected:", { activeId: active.id, overId: over.id });
 
     const dragged = parseDragId(String(active.id));
     const target = parseDragId(String(over.id));
 
-    if (!dragged) return;
+    console.log("Parsed:", { dragged, target });
+
+    if (!dragged) {
+      console.log("No dragged item");
+      return;
+    }
 
     try {
       // Dropping onto root drop zone
       if (over.id === "root-drop") {
+        console.log("Dropping to root");
         if (dragged.type === "conversation") await moveConversationToFolder(dragged.id, null);
         if (dragged.type === "folder") await moveFolderToParent(dragged.id, null);
         await loadConversations();
@@ -1295,6 +1335,7 @@ export default function App() {
       }
 
       if (target?.type === "folder") {
+        console.log("Dropping to folder:", target.id);
         if (dragged.type === "conversation") {
           await moveConversationToFolder(dragged.id, target.id);
           await loadConversations();
@@ -1414,6 +1455,12 @@ export default function App() {
                     setEditingConvId("");
                   }
                 }}
+                expandedFolders={expandedFolders}
+                setExpandedFolders={setExpandedFolders}
+                onContextMenuFolder={(e, folderId) => {
+                  e.preventDefault();
+                  setContextMenu({ x: e.clientX, y: e.clientY, folderId });
+                }}
               />
             ))}
 
@@ -1475,50 +1522,92 @@ export default function App() {
             style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
             onClick={() => setContextMenu(null)}
           >
-            <button
-              onClick={() => {
-                setEditingConvId(contextMenu.convId);
-                setEditingTitle(conversations.find((c) => c.id === contextMenu.convId)?.title || "");
-                setContextMenu(null);
-              }}
-              className="block w-full text-left px-4 py-2 hover:bg-slate-600 text-sm text-slate-100"
-            >
-              ✏️ Renommer
-            </button>
-            {/* Sous-menu déplacer vers dossier */}
-            <div className="border-t border-slate-600">
-              <div className="px-4 py-2 text-xs font-semibold text-slate-300">📁 Déplacer vers:</div>
-              <button
-                onClick={() => {
-                  moveConversationToFolder(contextMenu.convId, null);
-                  setContextMenu(null);
-                }}
-                className="block w-full text-left px-6 py-1 hover:bg-slate-600 text-xs text-slate-200"
-              >
-                Aucun dossier
-              </button>
-              {folders.map((folder) => (
+            {/* Menu pour les conversations */}
+            {contextMenu.convId && (
+              <>
                 <button
-                  key={folder.id}
                   onClick={() => {
-                    moveConversationToFolder(contextMenu.convId, folder.id);
+                    setEditingConvId(contextMenu.convId);
+                    setEditingTitle(conversations.find((c) => c.id === contextMenu.convId)?.title || "");
                     setContextMenu(null);
                   }}
-                  className="block w-full text-left px-6 py-1 hover:bg-slate-600 text-xs text-slate-200"
+                  className="block w-full text-left px-4 py-2 hover:bg-slate-600 text-sm text-slate-100"
                 >
-                  {folder.name}
+                  {t(language, "rename")}
                 </button>
-              ))}
-            </div>
-            <button
-              onClick={() => {
-                deleteConversation(contextMenu.convId);
-                setContextMenu(null);
-              }}
-              className="block w-full text-left px-4 py-2 hover:bg-red-900 text-sm text-red-300 border-t border-slate-600"
-            >
-              🗑️ Supprimer
-            </button>
+                {/* Sous-menu déplacer vers dossier */}
+                <div className="border-t border-slate-600">
+                  <div className="px-4 py-2 text-xs font-semibold text-slate-300">{t(language, "moveTo")}</div>
+                  <button
+                    onClick={() => {
+                      moveConversationToFolder(contextMenu.convId, null);
+                      setContextMenu(null);
+                    }}
+                    className="block w-full text-left px-6 py-1 hover:bg-slate-600 text-xs text-slate-200"
+                  >
+                    {t(language, "noFolder_opt")}
+                  </button>
+                  {folders.map((folder) => (
+                    <button
+                      key={folder.id}
+                      onClick={() => {
+                        moveConversationToFolder(contextMenu.convId, folder.id);
+                        setContextMenu(null);
+                      }}
+                      className="block w-full text-left px-6 py-1 hover:bg-slate-600 text-xs text-slate-200"
+                    >
+                      {folder.name}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => {
+                    deleteConversation(contextMenu.convId);
+                    setContextMenu(null);
+                  }}
+                  className="block w-full text-left px-4 py-2 hover:bg-red-900 text-sm text-red-300 border-t border-slate-600"
+                >
+                  {t(language, "delete")}
+                </button>
+              </>
+            )}
+
+            {/* Menu pour les dossiers */}
+            {contextMenu.folderId && (
+              <>
+                <button
+                  onClick={async () => {
+                    const currentName = folders.find((f) => f.id === contextMenu.folderId)?.name || "";
+                    const newName = prompt(t(language, "renameFolder"), currentName);
+                    if (newName && newName.trim()) {
+                      await renameFolder(contextMenu.folderId, newName.trim());
+                    }
+                    setContextMenu(null);
+                  }}
+                  className="block w-full text-left px-4 py-2 hover:bg-slate-600 text-sm text-slate-100"
+                >
+                  {t(language, "renameFolder")}
+                </button>
+                <button
+                  onClick={() => {
+                    createFolder(`${folders.find((f) => f.id === contextMenu.folderId)?.name || "Folder"} Sub`, contextMenu.folderId);
+                    setContextMenu(null);
+                  }}
+                  className="block w-full text-left px-4 py-2 hover:bg-slate-600 text-sm text-slate-100 border-t border-slate-600"
+                >
+                  {t(language, "createSubfolder")}
+                </button>
+                <button
+                  onClick={() => {
+                    deleteFolder(contextMenu.folderId);
+                    setContextMenu(null);
+                  }}
+                  className="block w-full text-left px-4 py-2 hover:bg-red-900 text-sm text-red-300 border-t border-slate-600"
+                >
+                  {t(language, "deleteFolder")}
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -1534,27 +1623,27 @@ export default function App() {
           <div className="flex gap-2 items-center">
             <button
               onClick={() => setTab("chat")}
-              className={`px-3 py-2 rounded ${tab === "chat" ? "bg-blue-600 text-white" : "bg-slate-700"}`}
+              className={`px-4 py-2 rounded text-sm font-semibold transition-all ${tab === "chat" ? "bg-blue-600 text-white shadow-lg" : "bg-slate-700 hover:bg-slate-600 text-slate-200"}`}
             >
-              💬
+              ◆ {t(language, "chat")}
             </button>
             <button
               onClick={() => setTab("settings")}
-              className={`px-3 py-2 rounded ${tab === "settings" ? "bg-blue-600 text-white" : "bg-slate-700"}`}
+              className={`px-4 py-2 rounded text-sm font-semibold transition-all ${tab === "settings" ? "bg-blue-600 text-white shadow-lg" : "bg-slate-700 hover:bg-slate-600 text-slate-200"}`}
             >
-              ⚙️
+              {t(language, "settings")}
             </button>
             <button
               onClick={() => setTab("history")}
-              className={`px-3 py-2 rounded ${tab === "history" ? "bg-blue-600 text-white" : "bg-slate-700"}`}
+              className={`px-4 py-2 rounded text-sm font-semibold transition-all ${tab === "history" ? "bg-blue-600 text-white shadow-lg" : "bg-slate-700 hover:bg-slate-600 text-slate-200"}`}
             >
-              📊
+              {t(language, "history")}
             </button>
-            <div className="border-l border-slate-600 mx-2 h-6" />
-            <span className="text-sm opacity-60">{currentUser?.pseudo}</span>
+            <div className="border-t border-slate-600 my-2" />
+            <span className="text-xs opacity-70 px-2 py-1">{currentUser?.pseudo}</span>
             <button
               onClick={handleLogout}
-              className="px-3 py-2 rounded bg-red-600/20 hover:bg-red-600/40 text-red-300 text-sm"
+              className="px-4 py-2 rounded text-sm font-semibold bg-red-600/30 hover:bg-red-600/50 text-red-300 transition-all"
             >
               {t(language, "logout")}
             </button>
@@ -1568,8 +1657,7 @@ export default function App() {
               {messages.length === 0 ? (
                 <div className="h-full flex items-center justify-center">
                   <div className="text-center space-y-4">
-                    <div className="text-6xl">💬</div>
-                    <p className="text-lg font-medium">{t(language, "startConv")}</p>
+                    <p className="text-xl font-medium text-slate-300">{t(language, "startConv")}</p>
                   </div>
                 </div>
               ) : (
