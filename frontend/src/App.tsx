@@ -735,7 +735,7 @@ function ConvItem({
   currentConvId: string;
   onSelect: (id: string) => void;
   onContextMenu: (e: React.MouseEvent, convId: string) => void;
-  editingConvId: string;
+  editingConvId: string | null;
   editingTitle: string;
   onEditChange: (value: string) => void;
   onEditBlur: () => void;
@@ -799,7 +799,7 @@ function FolderTreeNode({
   currentConvId: string;
   onSelectConv: (id: string) => void;
   onContextMenu: (e: React.MouseEvent, convId: string) => void;
-  editingConvId: string;
+  editingConvId: string | null;
   editingTitle: string;
   onEditChange: (value: string) => void;
   onEditBlur: () => void;
@@ -935,14 +935,26 @@ export default function App() {
   const [loginPseudo, setLoginPseudo] = useState("");
   const [loginPin, setLoginPin] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [token, setToken] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Construit l'en-tête d'autorisation à envoyer au backend. Le jeton prouve
+  // qui on est : sans lui, le serveur refuse l'accès aux données.
+  const authHeaders = (): Record<string, string> => {
+    const t = token || sessionStorage.getItem("token") || "";
+    return t ? { Authorization: `Bearer ${t}` } : {};
+  };
 
   useEffect(() => {
     // Restaurer la session depuis sessionStorage
     const stored = sessionStorage.getItem("currentUser");
+    const storedToken = sessionStorage.getItem("token");
     if (stored) {
       setCurrentUser(JSON.parse(stored));
+    }
+    if (storedToken) {
+      setToken(storedToken);
     }
     // Restaurer la langue depuis localStorage
     const savedLanguage = localStorage.getItem("language") as "fr" | "en" | "es" | null;
@@ -964,7 +976,7 @@ export default function App() {
   const loadHistory = async () => {
     if (!currentUser) return;
     try {
-      const res = await fetch(`/api/history?user_id=${currentUser.id}`);
+      const res = await fetch("/api/history", { headers: authHeaders() });
       const data = await res.json();
       setHistory(data.history || []);
     } catch (err) {
@@ -974,7 +986,7 @@ export default function App() {
 
   const loadSettings = async () => {
     try {
-      const res = await fetch("/api/settings");
+      const res = await fetch("/api/settings", { headers: authHeaders() });
       const data = await res.json();
       // Ne pas surcharger la langue : elle est définie par la landing page et sauvegardée dans localStorage
       if (data.critical_level) setCriticalLevel(data.critical_level);
@@ -986,7 +998,7 @@ export default function App() {
   const loadFolders = async () => {
     if (!currentUser) return;
     try {
-      const res = await fetch(`/api/folders?user_id=${currentUser.id}`);
+      const res = await fetch("/api/folders", { headers: authHeaders() });
       const data = await res.json();
       setFolders(data.folders);
     } catch (err) {
@@ -1009,6 +1021,8 @@ export default function App() {
       }
       const data = await res.json();
       const user: User = { id: data.user_id, pseudo: data.pseudo };
+      setToken(data.access_token);
+      sessionStorage.setItem("token", data.access_token);
       setCurrentUser(user);
       sessionStorage.setItem("currentUser", JSON.stringify(user));
       setLoginPseudo("");
@@ -1033,6 +1047,8 @@ export default function App() {
       }
       const data = await res.json();
       const user: User = { id: data.user_id, pseudo: data.pseudo };
+      setToken(data.access_token);
+      sessionStorage.setItem("token", data.access_token);
       setCurrentUser(user);
       sessionStorage.setItem("currentUser", JSON.stringify(user));
       setLoginPseudo("");
@@ -1045,6 +1061,8 @@ export default function App() {
   const handleLogout = () => {
     setCurrentUser(null);
     sessionStorage.removeItem("currentUser");
+    setToken("");
+    sessionStorage.removeItem("token");
     setMessages([]);
     setConversations([]);
     setFolders([]);
@@ -1068,7 +1086,7 @@ export default function App() {
   const loadConversations = async () => {
     if (!currentUser) return;
     try {
-      const res = await fetch(`/api/conversations?user_id=${currentUser.id}`);
+      const res = await fetch("/api/conversations", { headers: authHeaders() });
       const data = await res.json();
       setConversations(data.conversations);
       if (data.conversations.length === 0) {
@@ -1084,7 +1102,7 @@ export default function App() {
 
   const loadMessages = async () => {
     try {
-      const res = await fetch(`/api/conversations/${currentConvId}/messages`);
+      const res = await fetch(`/api/conversations/${currentConvId}/messages`, { headers: authHeaders() });
       const data = await res.json();
       setMessages(data.messages || []);
     } catch (err) {
@@ -1097,8 +1115,8 @@ export default function App() {
     try {
       const res = await fetch("/api/conversations", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, user_id: currentUser.id }),
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ title }),
       });
       const data = await res.json();
       await loadConversations();
@@ -1130,11 +1148,10 @@ export default function App() {
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           message: userMessage,
           conversation_id: convIdAtSend,
-          user_id: currentUser?.id,
           language: language
         }),
         signal: abortControllerRef.current.signal,
@@ -1164,7 +1181,7 @@ export default function App() {
 
   const deleteConversation = async (convId: string) => {
     try {
-      await fetch(`/api/conversations/${convId}`, { method: "DELETE" });
+      await fetch(`/api/conversations/${convId}`, { method: "DELETE", headers: authHeaders() });
       await loadConversations();
       setMessages([]);
     } catch (err) {
@@ -1176,7 +1193,7 @@ export default function App() {
     try {
       await fetch(`/api/conversations/${convId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ title: newTitle }),
       });
       await loadConversations();
@@ -1192,7 +1209,7 @@ export default function App() {
 
       await fetch("/api/settings", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           critical_level: criticalLevel,
           language: language
@@ -1208,7 +1225,7 @@ export default function App() {
     if (!window.confirm(t(language, "deleteAllWarning"))) return;
 
     try {
-      await fetch(`/api/history/clear-all?user_id=${currentUser.id}`, { method: "DELETE" });
+      await fetch("/api/history/clear-all", { method: "DELETE", headers: authHeaders() });
       loadHistory();
     } catch (err) {
       console.error(err);
@@ -1218,7 +1235,7 @@ export default function App() {
   const deleteHistoryEntry = async (conversationId: string, timestamp: string) => {
     if (!currentUser) return;
     try {
-      await fetch(`/api/history/delete?conversation_id=${conversationId}&timestamp=${encodeURIComponent(timestamp)}`, { method: "DELETE" });
+      await fetch(`/api/history/delete?conversation_id=${conversationId}&timestamp=${encodeURIComponent(timestamp)}`, { method: "DELETE", headers: authHeaders() });
       loadHistory();
     } catch (err) {
       console.error(err);
@@ -1230,8 +1247,8 @@ export default function App() {
     try {
       await fetch("/api/folders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, parent_id: parentId, user_id: currentUser.id }),
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ name, parent_id: parentId }),
       });
       await loadFolders();
     } catch (err) {
@@ -1245,7 +1262,7 @@ export default function App() {
       return;
     }
     try {
-      await fetch(`/api/folders/${folderId}`, { method: "DELETE" });
+      await fetch(`/api/folders/${folderId}`, { method: "DELETE", headers: authHeaders() });
       await loadFolders();
       await loadConversations();
     } catch (err) {
@@ -1257,7 +1274,7 @@ export default function App() {
     try {
       await fetch(`/api/folders/${folderId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ name: newName }),
       });
       await loadFolders();
@@ -1273,7 +1290,7 @@ export default function App() {
     try {
       await fetch(`/api/conversations/${convId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ folder: folderId }),
       });
     } catch (err) {
@@ -1288,7 +1305,7 @@ export default function App() {
     try {
       await fetch(`/api/folders/${folderId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ parent_id: newParentId }),
       });
     } catch (err) {
@@ -1442,14 +1459,14 @@ export default function App() {
                 editingTitle={editingTitle}
                 onEditChange={setEditingTitle}
                 onEditBlur={() => {
-                  if (editingTitle.trim()) {
+                  if (editingConvId && editingTitle.trim()) {
                     renameConversation(editingConvId, editingTitle);
                   }
                   setEditingConvId("");
                 }}
                 onEditKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    if (editingTitle.trim()) {
+                    if (editingConvId && editingTitle.trim()) {
                       renameConversation(editingConvId, editingTitle);
                     }
                     setEditingConvId("");
@@ -1483,14 +1500,14 @@ export default function App() {
                       editingTitle={editingTitle}
                       onEditChange={setEditingTitle}
                       onEditBlur={() => {
-                        if (editingTitle.trim()) {
+                        if (editingConvId && editingTitle.trim()) {
                           renameConversation(editingConvId, editingTitle);
                         }
                         setEditingConvId("");
                       }}
                       onEditKeyDown={(e) => {
                         if (e.key === "Enter") {
-                          if (editingTitle.trim()) {
+                          if (editingConvId && editingTitle.trim()) {
                             renameConversation(editingConvId, editingTitle);
                           }
                           setEditingConvId("");
@@ -1527,7 +1544,7 @@ export default function App() {
               <>
                 <button
                   onClick={() => {
-                    setEditingConvId(contextMenu.convId);
+                    setEditingConvId(contextMenu.convId!);
                     setEditingTitle(conversations.find((c) => c.id === contextMenu.convId)?.title || "");
                     setContextMenu(null);
                   }}
@@ -1540,7 +1557,7 @@ export default function App() {
                   <div className="px-4 py-2 text-xs font-semibold text-slate-300">{t(language, "moveTo")}</div>
                   <button
                     onClick={() => {
-                      moveConversationToFolder(contextMenu.convId, null);
+                      moveConversationToFolder(contextMenu.convId!, null);
                       setContextMenu(null);
                     }}
                     className="block w-full text-left px-6 py-1 hover:bg-slate-600 text-xs text-slate-200"
@@ -1551,7 +1568,7 @@ export default function App() {
                     <button
                       key={folder.id}
                       onClick={() => {
-                        moveConversationToFolder(contextMenu.convId, folder.id);
+                        moveConversationToFolder(contextMenu.convId!, folder.id);
                         setContextMenu(null);
                       }}
                       className="block w-full text-left px-6 py-1 hover:bg-slate-600 text-xs text-slate-200"
@@ -1562,7 +1579,7 @@ export default function App() {
                 </div>
                 <button
                   onClick={() => {
-                    deleteConversation(contextMenu.convId);
+                    deleteConversation(contextMenu.convId!);
                     setContextMenu(null);
                   }}
                   className="block w-full text-left px-4 py-2 hover:bg-red-900 text-sm text-red-300 border-t border-slate-600"
@@ -1580,7 +1597,7 @@ export default function App() {
                     const currentName = folders.find((f) => f.id === contextMenu.folderId)?.name || "";
                     const newName = prompt(t(language, "renameFolder"), currentName);
                     if (newName && newName.trim()) {
-                      await renameFolder(contextMenu.folderId, newName.trim());
+                      await renameFolder(contextMenu.folderId!, newName.trim());
                     }
                     setContextMenu(null);
                   }}
@@ -1590,7 +1607,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => {
-                    createFolder(`${folders.find((f) => f.id === contextMenu.folderId)?.name || "Folder"} Sub`, contextMenu.folderId);
+                    createFolder(`${folders.find((f) => f.id === contextMenu.folderId)?.name || "Folder"} Sub`, contextMenu.folderId!);
                     setContextMenu(null);
                   }}
                   className="block w-full text-left px-4 py-2 hover:bg-slate-600 text-sm text-slate-100 border-t border-slate-600"
@@ -1599,7 +1616,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => {
-                    deleteFolder(contextMenu.folderId);
+                    deleteFolder(contextMenu.folderId!);
                     setContextMenu(null);
                   }}
                   className="block w-full text-left px-4 py-2 hover:bg-red-900 text-sm text-red-300 border-t border-slate-600"

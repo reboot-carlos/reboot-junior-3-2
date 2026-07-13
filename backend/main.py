@@ -5,12 +5,14 @@ import os
 import re
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
+import bcrypt
+import jwt
 import requests
 from anthropic import Anthropic
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -36,6 +38,11 @@ GBIF_CACHE_FILE = DATA_DIR / "gbif_cache.json"
 
 GBIF_API_BASE = "https://api.gbif.org/v1"
 DB_FILE = DATA_DIR / "users.db"
+
+# Secret pour signer les jetons de connexion (JWT). En prod, définir SECRET_KEY.
+SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-a-changer-en-prod")
+JWT_ALGO = "HS256"
+TOKEN_EXPIRE_DAYS = 30
 
 # Mots-clés d'espèces courants
 KNOWN_SPECIES = {
@@ -74,13 +81,14 @@ class AuthRequest(BaseModel):
     pin: str
 
 class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
     user_id: str
     pseudo: str
 
 class FolderCreate(BaseModel):
     name: str
     parent_id: str | None = None
-    user_id: str
 
 # ============================================================================
 # Authentification & Base de données
@@ -111,43 +119,115 @@ def init_db():
     conn.close()
 
 def hash_pin(pin: str) -> str:
-    """Hache le PIN avec SHA-256."""
-    return hashlib.sha256(pin.encode()).hexdigest()
+    """Hache le PIN avec bcrypt (sel intégré, résistant au brute-force)."""
+    return bcrypt.hashpw(pin.encode(), bcrypt.gensalt()).decode()
+
+def _is_bcrypt_hash(stored_hash: str) -> bool:
+    """Un hash bcrypt commence par $2 ; les anciens hash SHA-256 non."""
+    return stored_hash.startswith("$2")
+
+def verify_pin(pin: str, stored_hash: str) -> bool:
+    """Vérifie un PIN contre le hash stocké (bcrypt, ou ancien SHA-256)."""
+    if _is_bcrypt_hash(stored_hash):
+        return bcrypt.checkpw(pin.encode(), stored_hash.encode())
+    # Compte créé avant la migration : on compare l'ancien hash SHA-256.
+    return hashlib.sha256(pin.encode()).hexdigest() == stored_hash
 
 def create_user(pseudo: str, pin: str) -> str:
     """Crée un nouvel utilisateur. Retourne user_id. Raise si pseudo existe."""
     user_id = str(uuid.uuid4())[:12]
     pin_hash = hash_pin(pin)
 
+    conn = sqlite3.connect(DB_FILE)
     try:
-        conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO users (id, pseudo, pin_hash, created_at) VALUES (?, ?, ?, ?)",
             (user_id, pseudo, pin_hash, datetime.now().isoformat())
         )
         conn.commit()
-        conn.close()
         return user_id
     except sqlite3.IntegrityError:
         raise ValueError("Pseudo déjà utilisé")
+    finally:
+        # On ferme toujours la connexion, même en cas d'erreur (sinon la base
+        # reste verrouillée pour les requêtes suivantes).
+        conn.close()
 
 def verify_user(pseudo: str, pin: str) -> str:
     """Vérifie le pseudo/PIN et retourne user_id. Raise si invalide."""
-    pin_hash = hash_pin(pin)
-
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT id FROM users WHERE pseudo = ? AND pin_hash = ?",
-        (pseudo, pin_hash)
-    )
+    cursor.execute("SELECT id, pin_hash FROM users WHERE pseudo = ?", (pseudo,))
     result = cursor.fetchone()
-    conn.close()
 
-    if not result:
+    if not result or not verify_pin(pin, result[1]):
+        conn.close()
         raise ValueError("Pseudo ou PIN invalide")
-    return result[0]
+
+    user_id, stored_hash = result
+    # Migration transparente : on ré-hache en bcrypt les anciens comptes SHA-256.
+    if not _is_bcrypt_hash(stored_hash):
+        cursor.execute(
+            "UPDATE users SET pin_hash = ? WHERE id = ?", (hash_pin(pin), user_id)
+        )
+        conn.commit()
+    conn.close()
+    return user_id
+
+# ============================================================================
+# Jetons de connexion (JWT) & autorisation
+# ============================================================================
+
+def create_token(user_id: str) -> str:
+    """Crée un jeton signé qui prouve l'identité de l'utilisateur."""
+    payload = {"sub": user_id, "exp": datetime.utcnow() + timedelta(days=TOKEN_EXPIRE_DAYS)}
+    return jwt.encode(payload, SECRET_KEY, algorithm=JWT_ALGO)
+
+def get_current_user(authorization: str = Header(None)) -> str:
+    """Dépendance FastAPI : extrait et vérifie le user_id depuis le jeton Bearer.
+
+    On NE fait JAMAIS confiance à un user_id envoyé par le client : la seule
+    source d'identité est ce jeton signé côté serveur.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Jeton manquant")
+    token = authorization.split(" ", 1)[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGO])
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Jeton invalide ou expiré")
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Jeton invalide")
+    return user_id
+
+def get_conversation_owner(conv_id: str) -> str | None:
+    """Retourne le user_id propriétaire d'une conversation (ou None)."""
+    meta_file = get_conversation_dir(conv_id) / "metadata.json"
+    if meta_file.exists():
+        with open(meta_file) as f:
+            return json.load(f).get("user_id")
+    return None
+
+def require_conversation_owner(conv_id: str, user_id: str):
+    """Refuse (403) si la conversation n'appartient pas à l'utilisateur."""
+    if get_conversation_owner(conv_id) != user_id:
+        raise HTTPException(status_code=403, detail="Accès refusé")
+
+def get_folder_owner(folder_id: str) -> str | None:
+    """Retourne le user_id propriétaire d'un dossier (ou None)."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id FROM folders WHERE id = ?", (folder_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+def require_folder_owner(folder_id: str, user_id: str):
+    """Refuse (403) si le dossier n'appartient pas à l'utilisateur."""
+    if get_folder_owner(folder_id) != user_id:
+        raise HTTPException(status_code=403, detail="Accès refusé")
 
 def load_folders(user_id: str) -> list:
     """Charge tous les dossiers d'un utilisateur."""
@@ -573,7 +653,7 @@ def startup():
 def register(request: AuthRequest):
     try:
         user_id = create_user(request.pseudo, request.pin)
-        return AuthResponse(user_id=user_id, pseudo=request.pseudo)
+        return AuthResponse(access_token=create_token(user_id), user_id=user_id, pseudo=request.pseudo)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
@@ -581,7 +661,7 @@ def register(request: AuthRequest):
 def login(request: AuthRequest):
     try:
         user_id = verify_user(request.pseudo, request.pin)
-        return AuthResponse(user_id=user_id, pseudo=request.pseudo)
+        return AuthResponse(access_token=create_token(user_id), user_id=user_id, pseudo=request.pseudo)
     except ValueError:
         raise HTTPException(status_code=401, detail="Pseudo ou PIN invalide")
 
@@ -590,27 +670,29 @@ def health():
     return {"status": "ok"}
 
 @app.get("/api/conversations")
-def list_conversations(user_id: str = None):
+def list_conversations(user_id: str = Depends(get_current_user)):
     index = load_conversations_index()
-    convs = index["conversations"]
-    if user_id:
-        convs = [c for c in convs if c.get("user_id") == user_id]
+    convs = [c for c in index["conversations"] if c.get("user_id") == user_id]
     return {"conversations": convs}
 
 @app.post("/api/conversations")
-def create_conv(request: dict):
+def create_conv(request: dict, user_id: str = Depends(get_current_user)):
     title = request.get("title", "Nouvelle conversation")
-    user_id = request.get("user_id")
     conv_id = create_conversation(title, user_id=user_id)
     return {"conversation_id": conv_id}
 
 @app.delete("/api/conversations/{conv_id}")
-def delete_conv(conv_id: str):
+def delete_conv(conv_id: str, user_id: str = Depends(get_current_user)):
+    require_conversation_owner(conv_id, user_id)
     delete_conversation(conv_id)
     return {"status": "deleted"}
 
 @app.put("/api/conversations/{conv_id}")
-def update_conv(conv_id: str, request: dict):
+def update_conv(conv_id: str, request: dict, user_id: str = Depends(get_current_user)):
+    require_conversation_owner(conv_id, user_id)
+    # Si on déplace la conversation dans un dossier, il doit nous appartenir.
+    if request.get("folder"):
+        require_folder_owner(request["folder"], user_id)
     if "title" in request:
         rename_conversation(conv_id, request["title"])
     if "folder" in request:
@@ -633,7 +715,8 @@ def update_conv(conv_id: str, request: dict):
     return {"status": "ok"}
 
 @app.get("/api/conversations/{conv_id}/messages")
-def get_messages(conv_id: str):
+def get_messages(conv_id: str, user_id: str = Depends(get_current_user)):
+    require_conversation_owner(conv_id, user_id)
     history = load_conversation_history(conv_id)
     return {"messages": history}
 
@@ -642,19 +725,20 @@ def get_messages(conv_id: str):
 # ============================================================================
 
 @app.get("/api/folders")
-def list_folders(user_id: str):
+def list_folders(user_id: str = Depends(get_current_user)):
     """Retourne la liste plate des dossiers (le frontend construit l'arbre)."""
     return {"folders": load_folders(user_id)}
 
 @app.post("/api/folders")
-def create_folder(request: FolderCreate):
+def create_folder(request: FolderCreate, user_id: str = Depends(get_current_user)):
     """Crée un nouveau dossier. Refuse si depth > 5."""
     folder_id = str(uuid.uuid4())[:8]
     now = datetime.now().isoformat()
     conn = sqlite3.connect(DB_FILE)
 
-    # Vérifier la profondeur si parent_id fourni
+    # Vérifier la profondeur si parent_id fourni (et que le parent nous appartient)
     if request.parent_id:
+        require_folder_owner(request.parent_id, user_id)
         depth = get_folder_depth(request.parent_id, conn)
         if depth >= 4:  # parent à depth 4 → enfant serait depth 5, max autorisé
             conn.close()
@@ -663,15 +747,16 @@ def create_folder(request: FolderCreate):
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO folders (id, name, parent_id, user_id, created_at) VALUES (?, ?, ?, ?, ?)",
-        (folder_id, request.name, request.parent_id, request.user_id, now)
+        (folder_id, request.name, request.parent_id, user_id, now)
     )
     conn.commit()
     conn.close()
-    return {"id": folder_id, "name": request.name, "parent_id": request.parent_id, "user_id": request.user_id, "created_at": now}
+    return {"id": folder_id, "name": request.name, "parent_id": request.parent_id, "user_id": user_id, "created_at": now}
 
 @app.delete("/api/folders/{folder_id}")
-def delete_folder(folder_id: str):
+def delete_folder(folder_id: str, user_id: str = Depends(get_current_user)):
     """Supprime un dossier. Les sous-dossiers et conversations remontent au parent."""
+    require_folder_owner(folder_id, user_id)
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
@@ -708,8 +793,9 @@ def delete_folder(folder_id: str):
     return {"status": "deleted"}
 
 @app.patch("/api/folders/{folder_id}")
-def update_folder(folder_id: str, request: dict):
+def update_folder(folder_id: str, request: dict, user_id: str = Depends(get_current_user)):
     """Renomme OU change le parent_id d'un dossier."""
+    require_folder_owner(folder_id, user_id)
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
@@ -719,6 +805,7 @@ def update_folder(folder_id: str, request: dict):
     if "parent_id" in request:
         new_parent = request["parent_id"]  # peut être None
         if new_parent:
+            require_folder_owner(new_parent, user_id)
             depth = get_folder_depth(new_parent, conn)
             if depth >= 4:
                 conn.close()
@@ -730,11 +817,15 @@ def update_folder(folder_id: str, request: dict):
     return {"status": "ok"}
 
 @app.post("/api/chat")
-def chat(request: ChatRequest) -> ChatResponse:
+def chat(request: ChatRequest, user_id: str = Depends(get_current_user)) -> ChatResponse:
     user_message = request.message.strip()
 
     if not user_message:
         raise ValueError("Message vide")
+
+    # Si une conversation est ciblée, elle doit appartenir à l'utilisateur.
+    if request.conversation_id:
+        require_conversation_owner(request.conversation_id, user_id)
 
     # Commandes
     if user_message.lower() in ["help", "aide", "ayuda"]:
@@ -857,7 +948,7 @@ def chat(request: ChatRequest) -> ChatResponse:
 
     # Message normal
     if not request.conversation_id:
-        request.conversation_id = create_conversation("Nouvelle conversation", user_id=request.user_id)
+        request.conversation_id = create_conversation("Nouvelle conversation", user_id=user_id)
 
     history = load_conversation_history(request.conversation_id)
     memory = load_conversation_memory(request.conversation_id)
@@ -903,24 +994,24 @@ def chat(request: ChatRequest) -> ChatResponse:
     return ChatResponse(response=assistant_message, conversation_id=request.conversation_id)
 
 @app.get("/api/settings")
-def get_settings():
+def get_settings(user_id: str = Depends(get_current_user)):
     return load_settings()
 
 @app.put("/api/settings")
-def update_settings(request: dict):
+def update_settings(request: dict, user_id: str = Depends(get_current_user)):
     settings = load_settings()
     settings.update(request)
     save_settings(settings)
     return {"status": "ok"}
 
 @app.get("/api/history")
-def get_history(user_id: str = None):
+def get_history(user_id: str = Depends(get_current_user)):
     history_entries = []
     index = load_conversations_index()
 
     for conv in index.get("conversations", []):
-        # Filtrer par user_id si fourni
-        if user_id and conv.get("user_id") != user_id:
+        # On ne renvoie que l'historique des conversations de l'utilisateur.
+        if conv.get("user_id") != user_id:
             continue
 
         conv_id = conv["id"]
@@ -940,11 +1031,8 @@ def get_history(user_id: str = None):
     return {"history": sorted(history_entries, key=lambda x: x["timestamp"], reverse=True)}
 
 @app.delete("/api/history/clear-all")
-def clear_all_history(user_id: str = None):
+def clear_all_history(user_id: str = Depends(get_current_user)):
     """Supprime tout l'historique d'un utilisateur."""
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id requis")
-
     index = load_conversations_index()
     for conv in index.get("conversations", []):
         if conv.get("user_id") == user_id:
@@ -955,19 +1043,21 @@ def clear_all_history(user_id: str = None):
     return {"status": "ok", "message": "Historique supprimé"}
 
 @app.delete("/api/conversations/{conv_id}/history")
-def clear_conversation_history(conv_id: str):
+def clear_conversation_history(conv_id: str, user_id: str = Depends(get_current_user)):
     """Supprime l'historique d'une conversation spécifique."""
+    require_conversation_owner(conv_id, user_id)
     history_file = get_conversation_dir(conv_id) / "history.json"
     if history_file.exists():
         history_file.write_text("[]")
     return {"status": "ok", "message": "Historique de la conversation supprimé"}
 
 @app.delete("/api/history/delete")
-def delete_history_entry(conversation_id: str = None, timestamp: str = None):
+def delete_history_entry(conversation_id: str = None, timestamp: str = None, user_id: str = Depends(get_current_user)):
     """Supprime une entrée spécifique de l'historique par timestamp."""
     if not conversation_id or not timestamp:
         raise HTTPException(status_code=400, detail="conversation_id et timestamp requis")
 
+    require_conversation_owner(conversation_id, user_id)
     history_file = get_conversation_dir(conversation_id) / "history.json"
     if not history_file.exists():
         return {"status": "ok", "message": "Entrée non trouvée"}
